@@ -18,7 +18,7 @@ You need to copy ~20 more files and update their namespaces. See `MIGRATION_GUID
 
 ```powershell
 $source = "c:\xampp\htdocs\OurEdu\new-payment-be\core"
-$dest = "c:\xampp\htdocs\OurEdu\new-payment-be\packages\oureedu\laravel-sqs-messaging"
+$dest = "c:\xampp\htdocs\OurEdu\new-payment-be\packages\ouredu\laravel-sqs-messaging"
 
 # Copy core classes
 Copy-Item "$source\src\Support\Messaging\Sqs\*.php" -Destination "$dest\src\Sqs\" -Force
@@ -59,7 +59,7 @@ Get-ChildItem -Path "$dest\src" -Recurse -Filter "*.php" | ForEach-Object {
     "repositories": [
         {
             "type": "path",
-            "url": "../packages/oureedu/laravel-sqs-messaging"
+            "url": "../packages/ouredu/laravel-sqs-messaging"
         }
     ]
 }
@@ -68,7 +68,7 @@ Get-ChildItem -Path "$dest\src" -Recurse -Filter "*.php" | ForEach-Object {
 2. Install:
 ```bash
 cd core
-composer require oureedu/laravel-sqs-messaging
+composer require ouredu/laravel-sqs-messaging
 ```
 
 3. Publish:
@@ -86,12 +86,12 @@ php artisan sqs:ensure
 **Option A: New Repository (Recommended)**
 
 ```bash
-cd packages/oureedu/laravel-sqs-messaging
+cd packages/ouredu/laravel-sqs-messaging
 git init
 git add .
 git commit -m "Initial package release v1.0.0"
 git branch -M main
-git remote add origin https://github.com/oureedu/laravel-sqs-messaging.git
+git remote add origin https://github.com/ouredu/laravel-sqs-messaging.git
 git push -u origin main
 git tag -a v1.0.0 -m "Initial release"
 git push origin v1.0.0
@@ -101,7 +101,7 @@ git push origin v1.0.0
 
 ```bash
 git checkout -b feature/sqs-package
-git add packages/oureedu/laravel-sqs-messaging
+git add packages/ouredu/laravel-sqs-messaging
 git commit -m "Add SQS messaging package"
 git push origin feature/sqs-package
 ```
@@ -114,18 +114,18 @@ git push origin feature/sqs-package
     "repositories": [
         {
             "type": "vcs",
-            "url": "https://github.com/oureedu/laravel-sqs-messaging.git"
+            "url": "https://github.com/ouredu/laravel-sqs-messaging.git"
         }
     ],
     "require": {
-        "oureedu/laravel-sqs-messaging": "dev-main"
+        "ouredu/laravel-sqs-messaging": "dev-main"
     }
 }
 ```
 
 2. Install:
 ```bash
-composer require oureedu/laravel-sqs-messaging:dev-main
+composer require ouredu/laravel-sqs-messaging:dev-main
 ```
 
 3. Configure:

@@ -1,5 +1,5 @@
 {
-    "name": "oureedu/laravel-sqs-messaging",
+    "name": "ouredu/laravel-sqs-messaging",
     "description": "Laravel package for AWS SQS messaging with RabbitMQ rollback support",
     "type": "library",
     "license": "MIT",

@@ -19,7 +19,7 @@ A comprehensive Laravel package for AWS SQS messaging with RabbitMQ rollback sup
 ### Option 1: Via Composer (Recommended for Production)
 
 ```bash
-composer require oureedu/laravel-sqs-messaging
+composer require ouredu/laravel-sqs-messaging
 ```
 
 ### Option 2: Via Path Repository (For Development)
@@ -35,14 +35,14 @@ Add to your `composer.json`:
         }
     ],
     "require": {
-        "oureedu/laravel-sqs-messaging": "*"
+        "ouredu/laravel-sqs-messaging": "*"
     }
 }
 ```
 
 Then run:
 ```bash
-composer require oureedu/laravel-sqs-messaging
+composer require ouredu/laravel-sqs-messaging
 ```
 
 ## Configuration
