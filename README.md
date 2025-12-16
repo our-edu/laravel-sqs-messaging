@@ -28,12 +28,12 @@ Add to your `composer.json`:
 
 ```json
 {
-    "repositories": [
-        {
-            "type": "path",
-            "url": "../laravel-sqs-messaging"
-        }
-    ],
+    "repositories": {
+      "laravel-sqs-messaging": {
+        "type": "vcs",
+        "url": "https://github.com/our-edu/laravel-sqs-messaging"
+      }
+    },
     "require": {
         "ouredu/laravel-sqs-messaging": "*"
     }
@@ -50,7 +50,7 @@ composer require ouredu/laravel-sqs-messaging
 ### 1. Publish Configuration
 
 ```bash
-php artisan vendor:publish --provider="OurEdu\SqsMessaging\SqsMessagingServiceProvider" --tag="config"
+php artisan vendor:publish --provider="OurEdu\SqsMessaging\SqsMessagingServiceProvider"
 ```
 
 ### 2. Environment Variables
