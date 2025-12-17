@@ -165,7 +165,31 @@ php artisan sqs:cleanup-processed-events --days=7
 
 ## Migration from RabbitMQ
 
-The package includes `SQSPublisherAdapter` for easy migration:
+### Option 1: Use Unified MessagingService (Recommended)
+
+The package includes a `MessagingService` that can switch between SQS and RabbitMQ:
+
+```php
+use OurEdu\SqsMessaging\MessagingService;
+use OurEdu\SqsMessaging\Sqs\SQSTargetQueueResolver;
+
+$messaging = app(MessagingService::class);
+$notification = new Notification($queueName, $payload);
+
+// Resolve target queue (for SQS) - ignored for RabbitMQ
+$targetQueue = SQSTargetQueueResolver::resolve($queueName);
+
+// Automatically uses SQS or RabbitMQ based on MESSAGING_DRIVER
+$messaging->publish($notification, $targetQueue);
+```
+
+**Switch drivers via environment variable:**
+```env
+MESSAGING_DRIVER=sqs        # Use SQS (default)
+MESSAGING_DRIVER=rabbitmq   # Rollback to RabbitMQ
+```
+
+### Option 2: Direct SQS Adapter
 
 ```php
 use OurEdu\SqsMessaging\Sqs\SQSPublisherAdapter;
@@ -174,6 +198,13 @@ use App\Events\StudentEnrolled;
 $adapter = app(SQSPublisherAdapter::class);
 $adapter->publish(new StudentEnrolled($student), 'payment-service-queue');
 ```
+
+### Rollback & Cleanup
+
+See `ROLLBACK_GUIDE.md` for detailed instructions on:
+- Rolling back from SQS to RabbitMQ
+- Cleaning up RabbitMQ code once SQS is stable
+- Dual write mode for gradual migration
 
 ## Requirements
 

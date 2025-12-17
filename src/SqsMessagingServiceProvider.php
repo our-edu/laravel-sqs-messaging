@@ -19,11 +19,17 @@ class SqsMessagingServiceProvider extends ServiceProvider
             return new CloudWatchMetricsService();
         });
 
+        // Register unified MessagingService
+        $this->app->singleton(\OurEdu\SqsMessaging\MessagingService::class, function ($app) {
+            return new \OurEdu\SqsMessaging\MessagingService();
+        });
+
         // Merge config files
         $this->mergeConfigFrom(__DIR__ . '/../config/sqs.php', 'sqs');
         $this->mergeConfigFrom(__DIR__ . '/../config/sqs_queues.php', 'sqs_queues');
         $this->mergeConfigFrom(__DIR__ . '/../config/sqs_events.php', 'sqs_events');
         $this->mergeConfigFrom(__DIR__ . '/../config/sqs_target_queues.php', 'sqs_target_queues');
+        $this->mergeConfigFrom(__DIR__ . '/../config/messaging.php', 'messaging');
     }
 
     /**
@@ -37,6 +43,7 @@ class SqsMessagingServiceProvider extends ServiceProvider
             __DIR__ . '/../config/sqs_queues.php' => config_path('sqs_queues.php'),
             __DIR__ . '/../config/sqs_events.php' => config_path('sqs_events.php'),
             __DIR__ . '/../config/sqs_target_queues.php' => config_path('sqs_target_queues.php'),
+            __DIR__ . '/../config/messaging.php' => config_path('messaging.php'),
         ], 'config');
 
         // Publish migration
