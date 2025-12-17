@@ -4,6 +4,7 @@ namespace OurEdu\SqsMessaging\Drivers;
 
 use OurEdu\SqsMessaging\Contracts\MessagingDriverInterface;
 use Illuminate\Support\Facades\Log;
+use OurEdu\SqsMessaging\Enums\DriversEnum;
 
 /**
  * RabbitMQ Messaging Driver
@@ -38,7 +39,7 @@ class RabbitMqMessagingDriver implements MessagingDriverInterface
 
     public function getName(): string
     {
-        return 'rabbitmq';
+        return DriversEnum::RabbitMQ;
     }
 
     public function isAvailable(): bool

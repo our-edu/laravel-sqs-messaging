@@ -3,6 +3,7 @@
 namespace OurEdu\SqsMessaging\Drivers;
 
 use OurEdu\SqsMessaging\Contracts\MessagingDriverInterface;
+use OurEdu\SqsMessaging\Enums\DriversEnum;
 use OurEdu\SqsMessaging\Sqs\SQSPublisherAdapter;
 use OurEdu\SqsMessaging\Sqs\SQSTargetQueueResolver;
 use Illuminate\Support\Facades\Log;
@@ -34,7 +35,7 @@ class SqsMessagingDriver implements MessagingDriverInterface
 
     public function getName(): string
     {
-        return 'sqs';
+        return DriversEnum::SQS;
     }
 
     public function isAvailable(): bool

@@ -6,6 +6,7 @@ use OurEdu\SqsMessaging\Contracts\MessagingDriverInterface;
 use OurEdu\SqsMessaging\Drivers\RabbitMqMessagingDriver;
 use OurEdu\SqsMessaging\Drivers\SqsMessagingDriver;
 use Illuminate\Support\Facades\Log;
+use OurEdu\SqsMessaging\Enums\DriversEnum;
 
 /**
  * Unified Messaging Service
@@ -25,7 +26,7 @@ class MessagingService
 
     public function __construct()
     {
-        $this->driver = config('messaging.driver', env('MESSAGING_DRIVER', 'sqs'));
+        $this->driver = config('messaging.driver', env('MESSAGING_DRIVER', DriversEnum::SQS));
         
         // Register available drivers
         $this->registerDrivers();
@@ -45,8 +46,8 @@ class MessagingService
     private function registerDrivers(): void
     {
         $this->drivers = [
-            'sqs' => new SqsMessagingDriver(),
-            'rabbitmq' => new RabbitMqMessagingDriver(),
+            DriversEnum::SQS => new SqsMessagingDriver(),
+            DriversEnum::RabbitMQ => new RabbitMqMessagingDriver(),
             // Add new drivers here:
             // 'pusher' => new PusherMessagingDriver(),
             // 'redis' => new RedisMessagingDriver(),
@@ -71,9 +72,9 @@ class MessagingService
 
         if (!$driver->isAvailable()) {
             // Fallback to SQS if configured driver is not available
-            if ($driverName !== 'sqs' && isset($this->drivers['sqs'])) {
+            if ($driverName !== DriversEnum::SQS && isset($this->drivers[DriversEnum::SQS])) {
                 Log::warning("Driver '{$driverName}' not available, falling back to SQS");
-                return $this->drivers['sqs'];
+                return $this->drivers[DriversEnum::SQS];
             }
             
             throw new \RuntimeException("Messaging driver '{$driverName}' is not available.");
@@ -100,13 +101,13 @@ class MessagingService
         $fallbackEnabled = config('messaging.fallback_to_rabbitmq', false);
 
         // Dual write mode: publish to both SQS and RabbitMQ
-        if ($dualWrite && $this->driver === 'sqs' && isset($this->drivers['rabbitmq'])) {
+        if ($dualWrite && $this->driver === DriversEnum::SQS && isset($this->drivers[DriversEnum::RabbitMQ])) {
             $sqsResult = null;
             $rabbitmqResult = null;
 
             // Always publish to SQS
             try {
-                $sqsDriver = $this->getDriverInstance('sqs');
+                $sqsDriver = $this->getDriverInstance(DriversEnum::SQS);
                 $sqsResult = $sqsDriver->publish($event, $queueName);
             } catch (\Throwable $e) {
                 Log::error('Dual write: SQS publish failed', [
@@ -117,7 +118,7 @@ class MessagingService
 
             // Also publish to RabbitMQ
             try {
-                $rabbitmqDriver = $this->getDriverInstance('rabbitmq');
+                $rabbitmqDriver = $this->getDriverInstance(DriversEnum::RabbitMQ);
                 $rabbitmqResult = $rabbitmqDriver->publish($event, $queueName);
             } catch (\Throwable $e) {
                 Log::warning('Dual write: RabbitMQ publish failed', [
@@ -134,13 +135,13 @@ class MessagingService
             return $this->activeDriver->publish($event, $queueName);
         } catch (\Throwable $e) {
             // Fallback to RabbitMQ if enabled
-            if ($fallbackEnabled && $this->driver !== 'rabbitmq' && isset($this->drivers['rabbitmq'])) {
+            if ($fallbackEnabled && $this->driver !== DriversEnum::RabbitMQ && isset($this->drivers[DriversEnum::RabbitMQ])) {
                 Log::warning('Primary driver failed, falling back to RabbitMQ', [
                     'error' => $e->getMessage(),
                     'event' => method_exists($event, 'publishEventKey') ? $event->publishEventKey() : get_class($event),
                 ]);
                 
-                $rabbitmqDriver = $this->getDriverInstance('rabbitmq');
+                $rabbitmqDriver = $this->getDriverInstance(DriversEnum::RabbitMQ);
                 return $rabbitmqDriver->publish($event, $queueName);
             }
             throw $e;
@@ -160,7 +161,7 @@ class MessagingService
      */
     public function isSqs(): bool
     {
-        return $this->driver === 'sqs';
+        return $this->driver === DriversEnum::SQS;
     }
 
     /**
@@ -168,7 +169,7 @@ class MessagingService
      */
     public function isRabbitMQ(): bool
     {
-        return $this->driver === 'rabbitmq';
+        return $this->driver === DriversEnum::RabbitMQ;
     }
 
     /**
