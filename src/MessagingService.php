@@ -2,49 +2,92 @@
 
 namespace OurEdu\SqsMessaging;
 
-use OurEdu\SqsMessaging\Sqs\SQSPublisher;
-use OurEdu\SqsMessaging\Sqs\SQSPublisherAdapter;
-use OurEdu\SqsMessaging\Sqs\SQSTargetQueueResolver;
+use OurEdu\SqsMessaging\Contracts\MessagingDriverInterface;
+use OurEdu\SqsMessaging\Drivers\RabbitMqMessagingDriver;
+use OurEdu\SqsMessaging\Drivers\SqsMessagingDriver;
 use Illuminate\Support\Facades\Log;
 
 /**
  * Unified Messaging Service
  * 
- * Provides a single interface to publish messages via SQS or RabbitMQ.
- * Switch between drivers using MESSAGING_DRIVER environment variable.
+ * Provides a single interface to publish messages via multiple drivers (SQS, RabbitMQ, Pusher, etc.).
+ * Uses Strategy Pattern to allow adding new drivers without modifying existing code.
  * 
- * This enables easy rollback from SQS to RabbitMQ if needed.
+ * Follows SOLID principles:
+ * - Open/Closed: Open for extension (new drivers), closed for modification
+ * - Dependency Inversion: Depends on MessagingDriverInterface, not concrete implementations
  */
 class MessagingService
 {
     private string $driver;
-    private ?SQSPublisherAdapter $sqsAdapter = null;
-    private $rabbitmqPublisher = null;
+    private MessagingDriverInterface $activeDriver;
+    private array $drivers = [];
 
     public function __construct()
     {
         $this->driver = config('messaging.driver', env('MESSAGING_DRIVER', 'sqs'));
         
-        if ($this->driver === 'sqs') {
-            $this->sqsAdapter = app(SQSPublisherAdapter::class);
-        } elseif ($this->driver === 'rabbitmq') {
-            // Lazy load RabbitMQ publisher only if needed
-            if (class_exists(\Support\RabbitMQ\Publisher::class)) {
-                $this->rabbitmqPublisher = app(\Support\RabbitMQ\Publisher::class);
-            } else {
-                Log::warning('RabbitMQ Publisher class not found. Falling back to SQS.');
-                $this->driver = 'sqs';
-                $this->sqsAdapter = app(SQSPublisherAdapter::class);
-            }
-        }
+        // Register available drivers
+        $this->registerDrivers();
+        
+        // Set active driver
+        $this->activeDriver = $this->getDriverInstance($this->driver);
     }
 
     /**
-     * Publish a message (works with both SQS and RabbitMQ)
+     * Register all available messaging drivers
+     * 
+     * To add a new driver:
+     * 1. Create a class implementing MessagingDriverInterface
+     * 2. Add it to this method
+     * 3. No other code changes needed!
+     */
+    private function registerDrivers(): void
+    {
+        $this->drivers = [
+            'sqs' => new SqsMessagingDriver(),
+            'rabbitmq' => new RabbitMqMessagingDriver(),
+            // Add new drivers here:
+            // 'pusher' => new PusherMessagingDriver(),
+            // 'redis' => new RedisMessagingDriver(),
+            // etc.
+        ];
+    }
+
+    /**
+     * Get driver instance by name
+     * 
+     * @param string $driverName
+     * @return MessagingDriverInterface
+     * @throws \RuntimeException
+     */
+    private function getDriverInstance(string $driverName): MessagingDriverInterface
+    {
+        if (!isset($this->drivers[$driverName])) {
+            throw new \RuntimeException("Messaging driver '{$driverName}' is not registered.");
+        }
+
+        $driver = $this->drivers[$driverName];
+
+        if (!$driver->isAvailable()) {
+            // Fallback to SQS if configured driver is not available
+            if ($driverName !== 'sqs' && isset($this->drivers['sqs'])) {
+                Log::warning("Driver '{$driverName}' not available, falling back to SQS");
+                return $this->drivers['sqs'];
+            }
+            
+            throw new \RuntimeException("Messaging driver '{$driverName}' is not available.");
+        }
+
+        return $driver;
+    }
+
+    /**
+     * Publish a message (works with all registered drivers)
      * 
      * Supports:
-     * - Single driver mode (sqs or rabbitmq)
-     * - Dual write mode (publish to both)
+     * - Single driver mode (sqs, rabbitmq, pusher, etc.)
+     * - Dual write mode (publish to both SQS and RabbitMQ)
      * - Fallback mode (fallback to RabbitMQ if SQS fails)
      * 
      * @param object $event Event that implements publishEventKey() and toPublish()
@@ -57,13 +100,14 @@ class MessagingService
         $fallbackEnabled = config('messaging.fallback_to_rabbitmq', false);
 
         // Dual write mode: publish to both SQS and RabbitMQ
-        if ($dualWrite && $this->driver === 'sqs' && $this->rabbitmqPublisher) {
+        if ($dualWrite && $this->driver === 'sqs' && isset($this->drivers['rabbitmq'])) {
             $sqsResult = null;
             $rabbitmqResult = null;
 
             // Always publish to SQS
             try {
-                $sqsResult = $this->publishToSqs($event, $queueName);
+                $sqsDriver = $this->getDriverInstance('sqs');
+                $sqsResult = $sqsDriver->publish($event, $queueName);
             } catch (\Throwable $e) {
                 Log::error('Dual write: SQS publish failed', [
                     'error' => $e->getMessage(),
@@ -73,7 +117,8 @@ class MessagingService
 
             // Also publish to RabbitMQ
             try {
-                $rabbitmqResult = $this->publishToRabbitMQ($event);
+                $rabbitmqDriver = $this->getDriverInstance('rabbitmq');
+                $rabbitmqResult = $rabbitmqDriver->publish($event, $queueName);
             } catch (\Throwable $e) {
                 Log::warning('Dual write: RabbitMQ publish failed', [
                     'error' => $e->getMessage(),
@@ -85,55 +130,25 @@ class MessagingService
         }
 
         // Normal mode: single driver
-        if ($this->driver === 'sqs') {
-            try {
-                return $this->publishToSqs($event, $queueName);
-            } catch (\Throwable $e) {
-                // Fallback to RabbitMQ if enabled
-                if ($fallbackEnabled && $this->rabbitmqPublisher) {
-                    Log::warning('SQS publish failed, falling back to RabbitMQ', [
-                        'error' => $e->getMessage(),
-                        'event' => method_exists($event, 'publishEventKey') ? $event->publishEventKey() : get_class($event),
-                    ]);
-                    return $this->publishToRabbitMQ($event);
-                }
-                throw $e;
+        try {
+            return $this->activeDriver->publish($event, $queueName);
+        } catch (\Throwable $e) {
+            // Fallback to RabbitMQ if enabled
+            if ($fallbackEnabled && $this->driver !== 'rabbitmq' && isset($this->drivers['rabbitmq'])) {
+                Log::warning('Primary driver failed, falling back to RabbitMQ', [
+                    'error' => $e->getMessage(),
+                    'event' => method_exists($event, 'publishEventKey') ? $event->publishEventKey() : get_class($event),
+                ]);
+                
+                $rabbitmqDriver = $this->getDriverInstance('rabbitmq');
+                return $rabbitmqDriver->publish($event, $queueName);
             }
-        } else {
-            return $this->publishToRabbitMQ($event);
+            throw $e;
         }
     }
 
     /**
-     * Publish to SQS
-     */
-    private function publishToSqs($event, ?string $queueName): string
-    {
-        if (!$queueName) {
-            // Auto-resolve queue name from event type
-            $eventType = method_exists($event, 'publishEventKey') 
-                ? $event->publishEventKey() 
-                : get_class($event);
-            $queueName = SQSTargetQueueResolver::resolve($eventType);
-        }
-
-        return $this->sqsAdapter->publish($event, $queueName);
-    }
-
-    /**
-     * Publish to RabbitMQ
-     */
-    private function publishToRabbitMQ($event)
-    {
-        if (!$this->rabbitmqPublisher) {
-            throw new \RuntimeException('RabbitMQ Publisher not available. Check MESSAGING_DRIVER configuration.');
-        }
-
-        return $this->rabbitmqPublisher->publish($event);
-    }
-
-    /**
-     * Get current driver
+     * Get current driver name
      */
     public function getDriver(): string
     {
@@ -155,5 +170,29 @@ class MessagingService
     {
         return $this->driver === 'rabbitmq';
     }
-}
 
+    /**
+     * Get all registered drivers
+     * 
+     * @return array<string, MessagingDriverInterface>
+     */
+    public function getAvailableDrivers(): array
+    {
+        return array_filter($this->drivers, function ($driver) {
+            return $driver->isAvailable();
+        });
+    }
+
+    /**
+     * Register a custom driver
+     * 
+     * Allows runtime registration of new drivers (e.g., from service providers)
+     * 
+     * @param string $name Driver name
+     * @param MessagingDriverInterface $driver Driver instance
+     */
+    public function registerDriver(string $name, MessagingDriverInterface $driver): void
+    {
+        $this->drivers[$name] = $driver;
+    }
+}
