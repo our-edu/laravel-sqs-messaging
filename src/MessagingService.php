@@ -92,14 +92,12 @@ class MessagingService
      * - Fallback mode (fallback to RabbitMQ if SQS fails)
      * 
      * @param object $event Event that implements publishEventKey() and toPublish()
-     * @param string $queueName Target queue
      * @return string|void Message ID (SQS) or void (RabbitMQ)
      */
-    public function publish($event, string $queueName)
+    public function publish($event)
     {
         $dualWrite = config('messaging.dual_write', false);
         $fallbackEnabled = config('messaging.fallback_to_rabbitmq', false);
-
         // Dual write mode: publish to both SQS and RabbitMQ
         if ($dualWrite && $this->driver === DriversEnum::SQS && isset($this->drivers[DriversEnum::RabbitMQ])) {
             $sqsResult = null;
@@ -108,7 +106,7 @@ class MessagingService
             // Always publish to SQS
             try {
                 $sqsDriver = $this->getDriverInstance(DriversEnum::SQS);
-                $sqsResult = $sqsDriver->publish($event, $queueName);
+                $sqsResult = $sqsDriver->publish($event);
             } catch (\Throwable $e) {
                 Log::error('Dual write: SQS publish failed', [
                     'error' => $e->getMessage(),
@@ -119,7 +117,7 @@ class MessagingService
             // Also publish to RabbitMQ
             try {
                 $rabbitmqDriver = $this->getDriverInstance(DriversEnum::RabbitMQ);
-                $rabbitmqResult = $rabbitmqDriver->publish($event, $queueName);
+                $rabbitmqResult = $rabbitmqDriver->publish($event);
             } catch (\Throwable $e) {
                 Log::warning('Dual write: RabbitMQ publish failed', [
                     'error' => $e->getMessage(),

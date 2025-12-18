@@ -12,9 +12,9 @@ use OurEdu\SqsMessaging\Enums\DriversEnum;
  */
 class RabbitMqMessagingDriver implements MessagingDriverInterface
 {
-    public function publish($event, string $queueName)
+    public function publish($event)
     {
-        RabbitMqPublisherAdapter::publish($queueName, $event);
+        RabbitMqPublisherAdapter::publish($event->publishEventKey(), $event->toPublish());
     }
 
     public function getName(): string

@@ -18,16 +18,9 @@ class SqsMessagingDriver implements MessagingDriverInterface
         $this->adapter = $adapter ?? app(SQSPublisherAdapter::class);
     }
 
-    public function publish($event, string $queueName): string
+    public function publish($event): string
     {
-        if (!$queueName) {
-            // Auto-resolve queue name from event type
-            $eventType = method_exists($event, 'publishEventKey') 
-                ? $event->publishEventKey() 
-                : get_class($event);
-            $queueName = SQSTargetQueueResolver::resolve($eventType);
-        }
-
+        $queueName = SQSTargetQueueResolver::resolve($event->publishEventKey());
         return $this->adapter->publish($event, $queueName);
     }
 

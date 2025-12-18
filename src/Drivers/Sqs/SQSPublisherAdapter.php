@@ -31,7 +31,7 @@ class SQSPublisherAdapter
      */
     public function publish($event, string $queueName): string
     {
-        $eventType = method_exists($event, 'publishEventKey') ? $event->publishEventKey() : get_class($event);
+        $eventType = $event->publishEventKey();
         $payload = method_exists($event, 'toPublish') ? $event->toPublish() : [];
         
         return $this->sqsPublisher->publish($queueName, $eventType, $payload);
