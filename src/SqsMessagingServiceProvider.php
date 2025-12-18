@@ -2,10 +2,10 @@
 
 namespace OurEdu\SqsMessaging;
 
-use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Log;
-use OurEdu\SqsMessaging\Sqs\CloudWatchMetricsService;
-use OurEdu\SqsMessaging\Sqs\SQSResolver;
+use Illuminate\Support\ServiceProvider;
+use OurEdu\SqsMessaging\Drivers\Sqs\CloudWatchMetricsService;
+use OurEdu\SqsMessaging\Drivers\Sqs\SQSResolver;
 
 class SqsMessagingServiceProvider extends ServiceProvider
 {

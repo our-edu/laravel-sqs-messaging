@@ -3,8 +3,7 @@
 namespace OurEdu\SqsMessaging\Commands;
 
 use Illuminate\Console\Command;
-use OurEdu\SqsMessaging\Sqs\SQSPublisher;
-use OurEdu\SqsMessaging\Sqs\MessageEnvelope;
+use OurEdu\SqsMessaging\Drivers\Sqs\SQSPublisher;
 
 class TestSqsReceiveCommand extends Command
 {

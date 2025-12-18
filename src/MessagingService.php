@@ -2,10 +2,10 @@
 
 namespace OurEdu\SqsMessaging;
 
-use OurEdu\SqsMessaging\Contracts\MessagingDriverInterface;
-use OurEdu\SqsMessaging\Drivers\RabbitMqMessagingDriver;
-use OurEdu\SqsMessaging\Drivers\SqsMessagingDriver;
 use Illuminate\Support\Facades\Log;
+use OurEdu\SqsMessaging\Contracts\MessagingDriverInterface;
+use OurEdu\SqsMessaging\Drivers\RabbitMq\RabbitMqMessagingDriver;
+use OurEdu\SqsMessaging\Drivers\Sqs\SqsMessagingDriver;
 use OurEdu\SqsMessaging\Enums\DriversEnum;
 
 /**
@@ -92,10 +92,10 @@ class MessagingService
      * - Fallback mode (fallback to RabbitMQ if SQS fails)
      * 
      * @param object $event Event that implements publishEventKey() and toPublish()
-     * @param string|null $queueName Target queue (required for SQS, optional for RabbitMQ)
+     * @param string $queueName Target queue
      * @return string|void Message ID (SQS) or void (RabbitMQ)
      */
-    public function publish($event, ?string $queueName = null)
+    public function publish($event, string $queueName)
     {
         $dualWrite = config('messaging.dual_write', false);
         $fallbackEnabled = config('messaging.fallback_to_rabbitmq', false);

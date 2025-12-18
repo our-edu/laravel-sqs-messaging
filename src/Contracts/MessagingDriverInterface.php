@@ -14,10 +14,10 @@ interface MessagingDriverInterface
      * Publish a message
      * 
      * @param object $event Event that implements publishEventKey() and toPublish()
-     * @param string|null $queueName Target queue (optional for some drivers)
+     * @param string $queueName Target queue)
      * @return string|void Message ID or void
      */
-    public function publish($event, ?string $queueName = null);
+    public function publish($event,string $queueName);
 
     /**
      * Get driver name

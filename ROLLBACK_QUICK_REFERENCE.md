@@ -55,10 +55,11 @@ $adapter->publish($notification, $targetQueue);
 ```
 
 **After:**
+
 ```php
 // ✅ Unified service
+use OurEdu\SqsMessaging\Drivers\Sqs\SQSTargetQueueResolver;
 use OurEdu\SqsMessaging\MessagingService;
-use OurEdu\SqsMessaging\Sqs\SQSTargetQueueResolver;
 
 $messaging = app(MessagingService::class);
 $targetQueue = SQSTargetQueueResolver::resolve($queueName);

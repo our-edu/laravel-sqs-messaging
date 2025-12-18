@@ -3,7 +3,7 @@
 namespace OurEdu\SqsMessaging\Commands;
 
 use Illuminate\Console\Command;
-use OurEdu\SqsMessaging\Sqs\SQSResolver;
+use OurEdu\SqsMessaging\Drivers\Sqs\SQSResolver;
 
 class EnsureSqsQueuesCommand extends Command
 {
