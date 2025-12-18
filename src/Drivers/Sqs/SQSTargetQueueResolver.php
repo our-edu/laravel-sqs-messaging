@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace OurEdu\SqsMessaging\Sqs;
+namespace OurEdu\SqsMessaging\Drivers\Sqs;
 
 /**
  * Resolves target SQS queue name for event types

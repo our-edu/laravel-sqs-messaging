@@ -88,8 +88,8 @@ Notification::publish($this->queueName, $event->students);
 
 ```php
 // ✅ GOOD: Uses config to switch automatically
+use OurEdu\SqsMessaging\Drivers\Sqs\SQSTargetQueueResolver;
 use OurEdu\SqsMessaging\MessagingService;
-use OurEdu\SqsMessaging\Sqs\SQSTargetQueueResolver;
 
 $messaging = app(MessagingService::class);
 $notification = new Notification($this->queueName, $event->students);
@@ -121,9 +121,10 @@ class NotifyAdmissionThatStudentSubscribeAndPayListener
 ```
 
 **After:**
+
 ```php
+use OurEdu\SqsMessaging\Drivers\Sqs\SQSTargetQueueResolver;
 use OurEdu\SqsMessaging\MessagingService;
-use OurEdu\SqsMessaging\Sqs\SQSTargetQueueResolver;
 
 class NotifyAdmissionThatStudentSubscribeAndPayListener
 {

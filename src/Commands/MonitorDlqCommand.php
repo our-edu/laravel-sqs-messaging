@@ -4,8 +4,8 @@ namespace OurEdu\SqsMessaging\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
-use OurEdu\SqsMessaging\Sqs\SQSConsumer;
-use OurEdu\SqsMessaging\Sqs\SQSResolver;
+use OurEdu\SqsMessaging\Drivers\Sqs\SQSConsumer;
+use OurEdu\SqsMessaging\Drivers\Sqs\SQSResolver;
 
 /**
  * Daily monitoring command to check DLQ depth

@@ -4,9 +4,9 @@ namespace OurEdu\SqsMessaging\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
-use OurEdu\SqsMessaging\Sqs\SQSConsumer;
-use OurEdu\SqsMessaging\Sqs\SQSPublisher;
-use OurEdu\SqsMessaging\Sqs\SQSResolver;
+use OurEdu\SqsMessaging\Drivers\Sqs\SQSConsumer;
+use OurEdu\SqsMessaging\Drivers\Sqs\SQSPublisher;
+use OurEdu\SqsMessaging\Drivers\Sqs\SQSResolver;
 
 /**
  * Command to replay DLQ messages back to main queue

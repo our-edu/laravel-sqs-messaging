@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace OurEdu\SqsMessaging\Sqs;
+namespace OurEdu\SqsMessaging\Drivers\Sqs;
 
 use Aws\Exception\AwsException;
 use Aws\Sqs\SqsClient;

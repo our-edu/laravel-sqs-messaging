@@ -2,22 +2,22 @@
 
 namespace OurEdu\SqsMessaging\Commands;
 
+use GuzzleHttp\Exception\ConnectException;
+use GuzzleHttp\Exception\GuzzleException;
+use GuzzleHttp\Exception\ServerException;
+use GuzzleHttp\Exception\TooManyRedirectsException;
 use Illuminate\Console\Command;
+use Illuminate\Database\QueryException;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
-use OurEdu\SqsMessaging\Sqs\CloudWatchMetricsService;
-use OurEdu\SqsMessaging\Sqs\MessageEnvelope;
-use OurEdu\SqsMessaging\Sqs\SQSConsumer;
-use OurEdu\SqsMessaging\Sqs\SQSResolver;
+use OurEdu\SqsMessaging\Drivers\Sqs\CloudWatchMetricsService;
+use OurEdu\SqsMessaging\Drivers\Sqs\MessageEnvelope;
+use OurEdu\SqsMessaging\Drivers\Sqs\SQSConsumer;
+use OurEdu\SqsMessaging\Drivers\Sqs\SQSResolver;
 use PDOException;
-use GuzzleHttp\Exception\GuzzleException;
-use GuzzleHttp\Exception\ConnectException;
-use GuzzleHttp\Exception\ServerException;
-use GuzzleHttp\Exception\TooManyRedirectsException;
-use Illuminate\Http\Client\ConnectionException;
 use Predis\Connection\ConnectionException as RedisConnectionException;
-use Illuminate\Database\QueryException;
 
 /**
  * Worker command responsible for orchestrating message consumption per service queue.

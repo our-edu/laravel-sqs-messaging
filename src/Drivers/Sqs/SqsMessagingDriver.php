@@ -1,11 +1,10 @@
 <?php
 
-namespace OurEdu\SqsMessaging\Drivers;
+namespace OurEdu\SqsMessaging\Drivers\Sqs;
 
-use OurEdu\SqsMessaging\Contracts\MessagingDriverInterface;
-use OurEdu\SqsMessaging\Sqs\SQSPublisherAdapter;
-use OurEdu\SqsMessaging\Sqs\SQSTargetQueueResolver;
 use Illuminate\Support\Facades\Log;
+use OurEdu\SqsMessaging\Contracts\MessagingDriverInterface;
+use OurEdu\SqsMessaging\Enums\DriversEnum;
 
 /**
  * SQS Messaging Driver
@@ -19,22 +18,15 @@ class SqsMessagingDriver implements MessagingDriverInterface
         $this->adapter = $adapter ?? app(SQSPublisherAdapter::class);
     }
 
-    public function publish($event, ?string $queueName = null): string
+    public function publish($event): string
     {
-        if (!$queueName) {
-            // Auto-resolve queue name from event type
-            $eventType = method_exists($event, 'publishEventKey') 
-                ? $event->publishEventKey() 
-                : get_class($event);
-            $queueName = SQSTargetQueueResolver::resolve($eventType);
-        }
-
+        $queueName = SQSTargetQueueResolver::resolve($event->publishEventKey());
         return $this->adapter->publish($event, $queueName);
     }
 
     public function getName(): string
     {
-        return 'sqs';
+        return DriversEnum::SQS;
     }
 
     public function isAvailable(): bool

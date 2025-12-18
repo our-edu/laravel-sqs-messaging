@@ -116,7 +116,7 @@ php artisan sqs:ensure
 ### Publishing Messages
 
 ```php
-use OurEdu\SqsMessaging\Sqs\SQSPublisher;
+use OurEdu\SqsMessaging\Drivers\Sqs\SQSPublisher;
 
 $publisher = app(SQSPublisher::class);
 
@@ -170,17 +170,11 @@ php artisan sqs:cleanup-processed-events --days=7
 The package includes a `MessagingService` that can switch between SQS and RabbitMQ:
 
 ```php
+use OurEdu\SqsMessaging\Drivers\Sqs\SQSTargetQueueResolver;
 use OurEdu\SqsMessaging\MessagingService;
-use OurEdu\SqsMessaging\Sqs\SQSTargetQueueResolver;
 
-$messaging = app(MessagingService::class);
-$notification = new Notification($queueName, $payload);
+app(MessagingService::class)->publish($event, $queueName);
 
-// Resolve target queue (for SQS) - ignored for RabbitMQ
-$targetQueue = SQSTargetQueueResolver::resolve($queueName);
-
-// Automatically uses SQS or RabbitMQ based on MESSAGING_DRIVER
-$messaging->publish($notification, $targetQueue);
 ```
 
 **Switch drivers via environment variable:**
@@ -192,8 +186,8 @@ MESSAGING_DRIVER=rabbitmq   # Rollback to RabbitMQ
 ### Option 2: Direct SQS Adapter
 
 ```php
-use OurEdu\SqsMessaging\Sqs\SQSPublisherAdapter;
 use App\Events\StudentEnrolled;
+use OurEdu\SqsMessaging\Drivers\Sqs\SQSPublisherAdapter;
 
 $adapter = app(SQSPublisherAdapter::class);
 $adapter->publish(new StudentEnrolled($student), 'payment-service-queue');
