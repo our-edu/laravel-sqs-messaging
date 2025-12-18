@@ -130,7 +130,7 @@ class MessagingService
 
         // Normal mode: single driver
         try {
-            return $this->activeDriver->publish($event, $queueName);
+            return $this->activeDriver->publish($event);
         } catch (\Throwable $e) {
             // Fallback to RabbitMQ if enabled
             if ($fallbackEnabled && $this->driver !== DriversEnum::RabbitMQ && isset($this->drivers[DriversEnum::RabbitMQ])) {
@@ -140,7 +140,7 @@ class MessagingService
                 ]);
                 
                 $rabbitmqDriver = $this->getDriverInstance(DriversEnum::RabbitMQ);
-                return $rabbitmqDriver->publish($event, $queueName);
+                return $rabbitmqDriver->publish($event);
             }
             throw $e;
         }
