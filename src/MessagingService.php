@@ -10,10 +10,10 @@ use OurEdu\SqsMessaging\Enums\DriversEnum;
 
 /**
  * Unified Messaging Service
- * 
+ *
  * Provides a single interface to publish messages via multiple drivers (SQS, RabbitMQ, Pusher, etc.).
  * Uses Strategy Pattern to allow adding new drivers without modifying existing code.
- * 
+ *
  * Follows SOLID principles:
  * - Open/Closed: Open for extension (new drivers), closed for modification
  * - Dependency Inversion: Depends on MessagingDriverInterface, not concrete implementations
@@ -27,17 +27,17 @@ class MessagingService
     public function __construct()
     {
         $this->driver = config('messaging.driver', env('MESSAGING_DRIVER', DriversEnum::SQS));
-        
+
         // Register available drivers
         $this->registerDrivers();
-        
+
         // Set active driver
         $this->activeDriver = $this->getDriverInstance($this->driver);
     }
 
     /**
      * Register all available messaging drivers
-     * 
+     *
      * To add a new driver:
      * 1. Create a class implementing MessagingDriverInterface
      * 2. Add it to this method
@@ -57,12 +57,13 @@ class MessagingService
 
     /**
      * Get driver instance by name
-     * 
+     *
      * @param string $driverName
+     * @param string|null $eventClassReference
      * @return MessagingDriverInterface
      * @throws \RuntimeException
      */
-    private function getDriverInstance(string $driverName): MessagingDriverInterface
+    private function getDriverInstance(string $driverName, ?string $eventClassReference = null): MessagingDriverInterface
     {
         if (!isset($this->drivers[$driverName])) {
             throw new \RuntimeException("Messaging driver '{$driverName}' is not registered.");
@@ -70,13 +71,13 @@ class MessagingService
 
         $driver = $this->drivers[$driverName];
 
-        if (!$driver->isAvailable()) {
+        if (!$driver->isAvailable($eventClassReference)) {
             // Fallback to SQS if configured driver is not available
             if ($driverName !== DriversEnum::SQS && isset($this->drivers[DriversEnum::SQS])) {
                 Log::warning("Driver '{$driverName}' not available, falling back to SQS");
                 return $this->drivers[DriversEnum::SQS];
             }
-            
+
             throw new \RuntimeException("Messaging driver '{$driverName}' is not available.");
         }
 
@@ -85,16 +86,16 @@ class MessagingService
 
     /**
      * Publish a message (works with all registered drivers)
-     * 
+     *
      * Supports:
      * - Single driver mode (sqs, rabbitmq, pusher, etc.)
      * - Dual write mode (publish to both SQS and RabbitMQ)
      * - Fallback mode (fallback to RabbitMQ if SQS fails)
-     * 
+     *
      * @param object $event Event that implements publishEventKey() and toPublish()
      * @return string|void Message ID (SQS) or void (RabbitMQ)
      */
-    public function publish($event , $eventClassReference)
+    public function publish($event, $eventClassReference)
     {
         $dualWrite = config('messaging.dual_write', false);
         $fallbackEnabled = config('messaging.fallback_to_rabbitmq', false);
@@ -105,7 +106,7 @@ class MessagingService
 
             // Always publish to SQS
             try {
-                $sqsDriver = $this->getDriverInstance(DriversEnum::SQS);
+                $sqsDriver = $this->getDriverInstance(DriversEnum::SQS, $eventClassReference);
                 $sqsResult = $sqsDriver->publish($event);
             } catch (\Throwable $e) {
                 Log::error('Dual write: SQS publish failed', [
@@ -116,8 +117,8 @@ class MessagingService
 
             // Also publish to RabbitMQ
             try {
-                $rabbitmqDriver = $this->getDriverInstance(DriversEnum::RabbitMQ);
-                $rabbitmqResult = $rabbitmqDriver->publish($event , $eventClassReference);
+                $rabbitmqDriver = $this->getDriverInstance(DriversEnum::RabbitMQ , $eventClassReference);
+                $rabbitmqResult = $rabbitmqDriver->publish($event, $eventClassReference);
             } catch (\Throwable $e) {
                 Log::warning('Dual write: RabbitMQ publish failed', [
                     'error' => $e->getMessage(),
@@ -138,9 +139,9 @@ class MessagingService
                     'error' => $e->getMessage(),
                     'event' => method_exists($event, 'publishEventKey') ? $event->publishEventKey() : get_class($event),
                 ]);
-                
-                $rabbitmqDriver = $this->getDriverInstance(DriversEnum::RabbitMQ);
-                return $rabbitmqDriver->publish($event ,$eventClassReference);
+
+                $rabbitmqDriver = $this->getDriverInstance(DriversEnum::RabbitMQ , $eventClassReference);
+                return $rabbitmqDriver->publish($event, $eventClassReference);
             }
             throw $e;
         }
@@ -172,7 +173,7 @@ class MessagingService
 
     /**
      * Get all registered drivers
-     * 
+     *
      * @return array<string, MessagingDriverInterface>
      */
     public function getAvailableDrivers(): array
@@ -184,9 +185,9 @@ class MessagingService
 
     /**
      * Register a custom driver
-     * 
+     *
      * Allows runtime registration of new drivers (e.g., from service providers)
-     * 
+     *
      * @param string $name Driver name
      * @param MessagingDriverInterface $driver Driver instance
      */
