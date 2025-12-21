@@ -94,7 +94,7 @@ class MessagingService
      * @param object $event Event that implements publishEventKey() and toPublish()
      * @return string|void Message ID (SQS) or void (RabbitMQ)
      */
-    public function publish($event)
+    public function publish($event , $eventClassReference)
     {
         $dualWrite = config('messaging.dual_write', false);
         $fallbackEnabled = config('messaging.fallback_to_rabbitmq', false);
@@ -117,7 +117,7 @@ class MessagingService
             // Also publish to RabbitMQ
             try {
                 $rabbitmqDriver = $this->getDriverInstance(DriversEnum::RabbitMQ);
-                $rabbitmqResult = $rabbitmqDriver->publish($event);
+                $rabbitmqResult = $rabbitmqDriver->publish($event , $eventClassReference);
             } catch (\Throwable $e) {
                 Log::warning('Dual write: RabbitMQ publish failed', [
                     'error' => $e->getMessage(),
@@ -140,7 +140,7 @@ class MessagingService
                 ]);
                 
                 $rabbitmqDriver = $this->getDriverInstance(DriversEnum::RabbitMQ);
-                return $rabbitmqDriver->publish($event);
+                return $rabbitmqDriver->publish($event ,$eventClassReference);
             }
             throw $e;
         }

@@ -14,9 +14,10 @@ interface MessagingDriverInterface
      * Publish a message
      * 
      * @param object $event Event that implements publishEventKey() and toPublish()
+     * @param string|null $eventClassReference Optional event class reference
      * @return string|void Message ID or void
      */
-    public function publish($event);
+    public function publish($event , string $eventClassReference = null);
 
     /**
      * Get driver name
