@@ -168,13 +168,86 @@ php artisan sqs:cleanup-processed-events --days=7
 ### Option 1: Use Unified MessagingService (Recommended)
 
 The package includes a `MessagingService` that can switch between SQS and RabbitMQ:
+    
+in your listeners replace RabbitMQ publishing code with:
+```php
+        Notification::publish($queuName, $payload)
+```
+
+with 
+```php
+     app(MessagingService::class)->publish(
+            event: new Notification($queuName, $payload),
+            eventClassReference: Notification::class
+        );
+```
+### Example:
+#### Old RabbitMQ Publisher:
+```php
+namespace Domain\Payments\Listeners\ReversePaymentRequest;
+
+use App\BaseApp\Enums\RoleEnum;
+use Domain\Models\User;
+use Domain\Payments\Events\ReversePaymentRequest\ReversePaymentRequestCreatedEvent;
+use Domain\Payments\Notifications\ReversePaymentRequestNotification;
+use Illuminate\Contracts\Container\BindingResolutionException;
+
+class ReversePaymentRequestCreatedListener
+{
+    /**
+     * @throws BindingResolutionException
+     */
+    public function handle(ReversePaymentRequestCreatedEvent $event): void
+    {
+        $users = User::query()->whereHas('roles', function ($query) {
+            $query->whereIn('name', [RoleEnum::ACCOUNTANT_MANAGER, RoleEnum::ACCOUNTANT_MANAGER]);
+        })->get();
+        $usersUuids = $users->pluck('uuid')->toArray();
+        ReversePaymentRequestNotification::publish($event->reversePaymentRequest, $usersUuids);
+    }
+}
+
+```
+Replace
+        
+    ReversePaymentRequestNotification::publish($event->reversePaymentRequest, $usersUuids);
+with :
+
+      app(MessagingService::class)->publish(
+            event: new ReversePaymentRequestNotification(queueName: $this->queueName, payload: $event->students),
+            eventClassReference: ReversePaymentRequestNotification::class
+        );
+#### New Listener using MessagingService:
 
 ```php
-use OurEdu\SqsMessaging\Drivers\Sqs\SQSTargetQueueResolver;
-use OurEdu\SqsMessaging\MessagingService;
+namespace Domain\Payments\Listeners\ReversePaymentRequest;
 
-app(MessagingService::class)->publish($event, $queueName);
+use App\BaseApp\Enums\RoleEnum;
+use Domain\Models\User;
+use Domain\Payments\Events\ReversePaymentRequest\ReversePaymentRequestCreatedEvent;
+use Domain\Payments\Notifications\ReversePaymentRequestNotification;
+use Illuminate\Contracts\Container\BindingResolutionException;
 
+class ReversePaymentRequestCreatedListener
+{
+    /**
+     * @throws BindingResolutionException
+     */
+    public function handle(ReversePaymentRequestCreatedEvent $event): void
+    {
+        $users = User::query()->whereHas('roles', function ($query) {
+            $query->whereIn('name', [RoleEnum::ACCOUNTANT_MANAGER, RoleEnum::ACCOUNTANT_MANAGER]);
+        })->get();
+        $usersUuids = $users->pluck('uuid')->toArray();
+        
+        
+        // new messaging service publish
+         app(MessagingService::class)->publish(
+            event: new ReversePaymentRequestNotification(queueName: $this->queueName, payload: $event->students),
+            eventClassReference: ReversePaymentRequestNotification::class
+        );
+    }
+}
 ```
 
 **Switch drivers via environment variable:**
@@ -184,7 +257,7 @@ MESSAGING_DRIVER=rabbitmq   # Rollback to RabbitMQ
 ```
 
 ### Option 2: Direct SQS Adapter
-
+HINT : This approach will publish directly to SQS
 ```php
 use App\Events\StudentEnrolled;
 use OurEdu\SqsMessaging\Drivers\Sqs\SQSPublisherAdapter;
