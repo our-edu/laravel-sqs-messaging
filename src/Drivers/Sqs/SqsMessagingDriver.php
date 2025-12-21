@@ -18,7 +18,7 @@ class SqsMessagingDriver implements MessagingDriverInterface
         $this->adapter = $adapter ?? app(SQSPublisherAdapter::class);
     }
 
-    public function publish($event): string
+    public function publish($event, string $eventClassReference = null): string
     {
         $queueName = SQSTargetQueueResolver::resolve($event->publishEventKey());
         return $this->adapter->publish($event, $queueName);
@@ -29,7 +29,7 @@ class SqsMessagingDriver implements MessagingDriverInterface
         return DriversEnum::SQS;
     }
 
-    public function isAvailable(): bool
+    public function isAvailable(string $eventClassReference = null): bool
     {
         try {
             // Check if SQS adapter can be instantiated

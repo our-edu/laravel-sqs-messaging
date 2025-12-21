@@ -12,7 +12,7 @@ use OurEdu\SqsMessaging\Enums\DriversEnum;
  */
 class RabbitMqMessagingDriver implements MessagingDriverInterface
 {
-    public function publish($event , string $eventClassReference =null)
+    public function publish($event, string $eventClassReference = null)
     {
         $eventClassReference::publish($event->publishEventKey(), $event->toPublish());
 //        RabbitMqPublisherAdapter::publish($event->publishEventKey(), $event->toPublish());
@@ -23,11 +23,10 @@ class RabbitMqMessagingDriver implements MessagingDriverInterface
         return DriversEnum::RabbitMQ;
     }
 
-    public function isAvailable(): bool
+    public function isAvailable(string $eventClassReference = null): bool
     {
         try {
-            app(RabbitMqPublisherAdapter::class);
-            return true;
+            return !empty($eventClassReference) ?? false;
         } catch (\Throwable $e) {
             Log::warning('RabbitMq driver not available', ['error' => $e->getMessage()]);
             return false;
