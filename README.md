@@ -114,67 +114,16 @@ php artisan sqs:ensure
 ## Usage
 
 ### Publishing Messages
-
-```php
-use OurEdu\SqsMessaging\Drivers\Sqs\SQSPublisher;
-
-$publisher = app(SQSPublisher::class);
-
-$publisher->publish(
-    'payment-service-queue',
-    'StudentEnrolled',
-    ['student_uuid' => $student->uuid, 'amount' => 1000]
-);
-```
-
-### Consuming Messages
-
-Add to Supervisor configuration:
-
-```ini
-[program:sqs-payment-consumer]
-command=php /var/www/artisan sqs:consume payment-service-queue
-autostart=true
-autorestart=true
-user=www-data
-numprocs=2
-stdout_logfile=/var/www/storage/logs/payment-consumer.log
-```
-
-### Available Commands
-
-```bash
-# Ensure all queues exist
-php artisan sqs:ensure
-
-# Consume messages from a queue
-php artisan sqs:consume {queue}
-
-# Inspect DLQ messages
-php artisan sqs:inspect-dlq {queue}
-
-# Monitor DLQ depth
-php artisan sqs:monitor-dlq
-
-# Replay DLQ messages
-php artisan sqs:replay-dlq {queue} --limit=10
-
-# Cleanup old processed events
-php artisan sqs:cleanup-processed-events --days=7
-```
-
-## Migration from RabbitMQ
-
 ### Option 1: Use Unified MessagingService (Recommended)
 
-The package includes a `MessagingService` that can switch between SQS and RabbitMQ:
-    
-in your listeners replace RabbitMQ publishing code with:
+The package includes a `MessagingService` that can switch between available drivers ( SQS and RabbitMQ ):
+
+in your listeners in which you publish a message, replace RabbitMQ publishing code :
 ```php
         Notification::publish($queuName, $payload)
 ```
 
-with 
+with
 ```php
      app(MessagingService::class)->publish(
             event: new Notification($queuName, $payload),
@@ -209,7 +158,7 @@ class ReversePaymentRequestCreatedListener
 
 ```
 Replace
-        
+
     ReversePaymentRequestNotification::publish($event->reversePaymentRequest, $usersUuids);
 with :
 
@@ -264,6 +213,42 @@ use OurEdu\SqsMessaging\Drivers\Sqs\SQSPublisherAdapter;
 
 $adapter = app(SQSPublisherAdapter::class);
 $adapter->publish(new StudentEnrolled($student), 'payment-service-queue');
+```
+
+### Consuming Messages
+
+Add to Supervisor configuration:
+
+```ini
+[program:sqs-payment-consumer]
+command=php /var/www/artisan sqs:consume payment-service-queue
+autostart=true
+autorestart=true
+user=www-data
+numprocs=2
+stdout_logfile=/var/www/storage/logs/payment-consumer.log
+```
+
+### Available Commands
+
+```bash
+# Ensure all queues exist
+php artisan sqs:ensure
+
+# Consume messages from a queue
+php artisan sqs:consume {queue}
+
+# Inspect DLQ messages
+php artisan sqs:inspect-dlq {queue}
+
+# Monitor DLQ depth
+php artisan sqs:monitor-dlq
+
+# Replay DLQ messages
+php artisan sqs:replay-dlq {queue} --limit=10
+
+# Cleanup old processed events
+php artisan sqs:cleanup-processed-events --days=7
 ```
 
 ### Rollback & Cleanup
