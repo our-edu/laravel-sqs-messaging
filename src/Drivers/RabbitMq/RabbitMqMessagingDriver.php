@@ -14,7 +14,7 @@ class RabbitMqMessagingDriver implements MessagingDriverInterface
 {
     public function publish($event, string $eventClassReference = null)
     {
-        $eventClassReference::publish($event->publishEventKey(), $event->toPublish());
+        $eventClassReference::publishFromInstance($event);
 //        RabbitMqPublisherAdapter::publish($event->publishEventKey(), $event->toPublish());
     }
 
