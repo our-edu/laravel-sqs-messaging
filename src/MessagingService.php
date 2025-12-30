@@ -130,17 +130,29 @@ class MessagingService
         }
 
         // Normal mode: single driver
+        // If fallback enabled and SQS driver, check queue existence first to prevent auto-creation
+        if ($fallbackEnabled && $this->driver === DriversEnum::SQS && isset($this->drivers[DriversEnum::RabbitMQ])) {
+            $eventType = method_exists($event, 'publishEventKey') ? $event->publishEventKey() : null;
+            
+            if ($eventType) {
+                // Resolve queue name from event type (same as SQS driver does)
+                $queueName = \OurEdu\SqsMessaging\Drivers\Sqs\SQSTargetQueueResolver::resolve($eventType);
+                $sqsResolver = app(\OurEdu\SqsMessaging\Drivers\Sqs\SQSResolver::class);
+                
+                // If queue doesn't exist, skip SQS and send to RabbitMQ only
+                if (!$sqsResolver->queueExists($queueName)) {
+                    $rabbitmqDriver = $this->getDriverInstance(DriversEnum::RabbitMQ, $eventClassReference);
+                    return $rabbitmqDriver->publish($event, $eventClassReference);
+                }
+            }
+        }
+        
         try {
             return $this->activeDriver->publish($event);
         } catch (\Throwable $e) {
             // Fallback to RabbitMQ if enabled
             if ($fallbackEnabled && $this->driver !== DriversEnum::RabbitMQ && isset($this->drivers[DriversEnum::RabbitMQ])) {
-                Log::warning('Primary driver failed, falling back to RabbitMQ', [
-                    'error' => $e->getMessage(),
-                    'event' => method_exists($event, 'publishEventKey') ? $event->publishEventKey() : get_class($event),
-                ]);
-
-                $rabbitmqDriver = $this->getDriverInstance(DriversEnum::RabbitMQ , $eventClassReference);
+                $rabbitmqDriver = $this->getDriverInstance(DriversEnum::RabbitMQ, $eventClassReference);
                 return $rabbitmqDriver->publish($event, $eventClassReference);
             }
             throw $e;
