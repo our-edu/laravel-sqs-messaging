@@ -118,6 +118,51 @@ php artisan sqs:ensure
 
 The package includes a `MessagingService` that can switch between available drivers ( SQS and RabbitMQ ):
 
+update your Support\RabbitMQ\Publishable trait and add the following method:
+
+```php
+   public static function publishFromInstance(object $event): void
+    {
+        Container::getInstance()
+            ->make(Publisher::class)
+            ->publish($event);
+    }
+```
+to be 
+```php
+   <?php
+
+declare(strict_types=1);
+
+namespace Support\RabbitMQ;
+
+use Illuminate\Container\Container;
+use Illuminate\Contracts\Container\BindingResolutionException;
+
+trait Publishable
+{
+    /**
+     * @return void
+     * @throws BindingResolutionException
+     */
+    public static function publish(): void
+    {
+        Container::getInstance()
+            ->make(Publisher::class)
+            ->publish(new static(...func_get_args()));
+    }
+    public static function publishFromInstance(object $event): void
+    {
+        Container::getInstance()
+            ->make(Publisher::class)
+            ->publish($event);
+    }
+}
+
+```
+
+Then
+
 in your listeners in which you publish a message, replace RabbitMQ publishing code :
 ```php
         Notification::publish($queuName, $payload)

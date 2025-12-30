@@ -48,7 +48,7 @@ class SqsMessagingServiceProvider extends ServiceProvider
 
         // Publish migration
         $this->publishes([
-            __DIR__ . '/../database/migrations/create_processed_events_table.php' => database_path('migrations/' . date('Y_m_d_His') . '_create_processed_events_table.php'),
+            __DIR__ . '/../database/migrations/create_processed_events_table.php' => database_path('migrations/' . 'create_processed_events_table.php'),
         ], 'migrations');
 
         // Load commands
