@@ -51,6 +51,28 @@ class SQSResolver
     }
 
     /**
+     * Check if queue exists without creating it
+     * Uses AWS SQS getQueueUrl API - returns false if queue doesn't exist
+     * 
+     * @param string $queueName Base queue name (without prefix)
+     * @return bool True if queue exists, false otherwise
+     */
+    public function queueExists(string $queueName): bool
+    {
+        $resolvedQueueName = $this->resolveQueueName($queueName);
+        
+        try {
+            $this->sqsClient->getQueueUrl(['QueueName' => $resolvedQueueName]);
+            return true;
+        } catch (AwsException $e) {
+            if ($e->getAwsErrorCode() === 'AWS.SimpleQueueService.NonExistentQueue') {
+                return false;
+            }
+            return false;
+        }
+    }
+
+    /**
      * Get queue URL, create if it doesn't exist
      *
      * @throws AwsException
