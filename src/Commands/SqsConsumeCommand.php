@@ -36,6 +36,15 @@ class SqsConsumeCommand extends Command
     protected $signature = 'sqs:consume {queue : The SQS queue name to consume}';
     protected $description = 'Consume messages from SQS queue (managed by Supervisor)';
 
+    // Error rate thresholds for alerting
+    private const VALIDATION_ERROR_THRESHOLD = 0.01; // 1%
+    private const TRANSIENT_ERROR_THRESHOLD = 0.10; // 10%
+
+    // Track error counts for rate calculation
+    private int $totalProcessed = 0;
+    private int $validationErrors = 0;
+    private int $transientErrors = 0;
+
     // Exception classes that indicate transient errors (should retry)
     private const TRANSIENT_EXCEPTIONS = [
         ConnectionException::class, // Illuminate HTTP Client
@@ -79,9 +88,20 @@ class SqsConsumeCommand extends Command
             
             $this->info("Received " . count($messages) . " message(s)");
             
+            // Reset error counters for this polling cycle
+            $this->totalProcessed = 0;
+            $this->validationErrors = 0;
+            $this->transientErrors = 0;
+            
             // Process each message
             foreach ($messages as $message) {
                 $this->processMessage($message, $consumer, $queue);
+            }
+            
+            // Check error rates after processing all messages in this batch
+            if ($this->totalProcessed > 0) {
+                $this->checkValidationErrorRate($queue);
+                $this->checkTransientErrorRate($queue);
             }
             
             return Command::SUCCESS; // Exit after processing - Supervisor restarts
@@ -113,11 +133,15 @@ class SqsConsumeCommand extends Command
             $body = json_decode($message['Body'], true);
             
             if (json_last_error() !== JSON_ERROR_NONE) {
-                // Validation Error - Delete immediately
+                // Validation Error - Delete immediately, no retry
+                $this->totalProcessed++;
+                $this->validationErrors++;
+                
                 Log::warning('Invalid JSON, discarding', [
                     'queue' => $queue,
                     'message_id' => $messageId,
                     'error' => json_last_error_msg(),
+                    'error_type' => 'validation_error',
                 ]);
                 
                 $this->recordMetrics('unknown', 'validation_error');
@@ -127,11 +151,15 @@ class SqsConsumeCommand extends Command
             
             // Step 2: Validate MessageEnvelope
             if (!MessageEnvelope::validate($body)) {
-                // Validation Error - Delete immediately
+                // Validation Error - Delete immediately, no retry
+                $this->totalProcessed++;
+                $this->validationErrors++;
+                
                 Log::warning('Invalid message envelope, discarding', [
                     'queue' => $queue,
                     'message_id' => $messageId,
                     'body' => $body,
+                    'error_type' => 'validation_error',
                 ]);
                 
                 $this->recordMetrics('unknown', 'validation_error');
@@ -175,13 +203,21 @@ class SqsConsumeCommand extends Command
             $eventMap = config('sqs_events', []);
             
             if (!isset($eventMap[$eventType])) {
-                Log::warning('Event type not mapped', [
+                // Not mapped - treat as permanent error (delete, alert)
+                Log::error('Event type not mapped', [
                     'queue' => $queue,
                     'event_type' => $eventType,
+                    'idempotency_key' => $idempotencyKey,
                     'available_events' => array_keys($eventMap),
+                    'error_type' => 'permanent_error',
                 ]);
                 
-                // Not mapped - treat as permanent error (delete)
+                $this->notifyEngineering('Event Type Not Mapped', [
+                    'queue' => $queue,
+                    'event_type' => $eventType,
+                    'idempotency_key' => $idempotencyKey,
+                ]);
+                
                 $consumer->deleteMessage($receiptHandle);
                 $this->recordMetrics($eventType, 'permanent_error');
                 return;
@@ -197,10 +233,12 @@ class SqsConsumeCommand extends Command
                 // For now, pass payload directly
                 $listener->handle($payload);
             } else {
+                // Permanent error - listener doesn't have handle method
                 throw new \RuntimeException("Listener {$listenerClass} does not have handle method");
             }
             
             // Step 7: Success - Mark as processed and acknowledge
+            $this->totalProcessed++;
             $this->markAsProcessed($idempotencyKey, $eventType);
             $consumer->deleteMessage($receiptHandle);
             
@@ -219,8 +257,11 @@ class SqsConsumeCommand extends Command
             }
             
             // Classify and handle error
+            $this->totalProcessed++;
+            
             if ($this->isTransientError($e)) {
-                $this->handleTransientError($e, $eventType, $receiveCount, $queue);
+                $this->transientErrors++;
+                $this->handleTransientError($e, $eventType, $receiveCount, $queue, $idempotencyKey);
                 // Don't delete - let it retry (SQS will handle retry logic)
                 $this->recordMetrics($eventType ?? 'unknown', 'transient_error');
                 
@@ -239,15 +280,19 @@ class SqsConsumeCommand extends Command
                 
             } else {
                 // Unknown exception - treat as transient (safer)
+                $this->transientErrors++;
                 Log::error('Unknown exception type, treating as transient', [
                     'exception' => get_class($e),
                     'message' => $e->getMessage(),
                     'queue' => $queue,
-                    'event_type' => $eventType,
+                    'event_type' => $eventType ?? 'unknown',
+                    'idempotency_key' => $idempotencyKey,
+                    'receive_count' => $receiveCount,
+                    'error_type' => 'unknown',
                 ]);
                 
                 $this->recordMetrics($eventType ?? 'unknown', 'transient_error');
-                // Don't delete - let it retry
+                // Don't delete - let it retry (safer approach)
             }
         }
     }
@@ -335,15 +380,17 @@ class SqsConsumeCommand extends Command
         return false;
     }
 
-    private function handleTransientError(\Throwable $e, ?string $eventType, int $receiveCount, string $queue): void
+    private function handleTransientError(\Throwable $e, ?string $eventType, int $receiveCount, string $queue, ?string $idempotencyKey): void
     {
         Log::warning('Transient error, message will retry', [
             'error' => $e->getMessage(),
             'exception' => get_class($e),
             'event_type' => $eventType ?? 'unknown',
+            'idempotency_key' => $idempotencyKey,
             'receive_count' => $receiveCount,
             'queue' => $queue,
             'max_receive_count' => 5,
+            'error_type' => 'transient_error',
         ]);
         
         // Message will become visible again after visibility timeout
@@ -365,10 +412,11 @@ class SqsConsumeCommand extends Command
             'event_type' => $eventType ?? 'unknown',
             'idempotency_key' => $idempotencyKey,
             'queue' => $queue,
+            'error_type' => 'permanent_error',
             'trace' => $e->getTraceAsString(),
         ]);
         
-        // Alert engineering team (via Slack or other channels)
+        // Always alert for permanent errors
         $this->notifyEngineering('Permanent SQS Error', [
             'exception' => get_class($e),
             'message' => $e->getMessage(),
@@ -386,6 +434,50 @@ class SqsConsumeCommand extends Command
         Log::channel('slack')->critical($title, $context);
         
         // You can also send to other channels (email, PagerDuty, etc.)
+    }
+
+    /**
+     * Check validation error rate and alert if threshold exceeded
+     */
+    private function checkValidationErrorRate(string $queue): void
+    {
+        if ($this->totalProcessed === 0) {
+            return;
+        }
+
+        $errorRate = $this->validationErrors / $this->totalProcessed;
+        
+        if ($errorRate > self::VALIDATION_ERROR_THRESHOLD) {
+            $this->notifyEngineering('High Validation Error Rate', [
+                'queue' => $queue,
+                'validation_errors' => $this->validationErrors,
+                'total_processed' => $this->totalProcessed,
+                'error_rate' => round($errorRate * 100, 2) . '%',
+                'threshold' => self::VALIDATION_ERROR_THRESHOLD * 100 . '%',
+            ]);
+        }
+    }
+
+    /**
+     * Check transient error rate and alert if threshold exceeded
+     */
+    private function checkTransientErrorRate(string $queue): void
+    {
+        if ($this->totalProcessed === 0) {
+            return;
+        }
+
+        $errorRate = $this->transientErrors / $this->totalProcessed;
+        
+        if ($errorRate > self::TRANSIENT_ERROR_THRESHOLD) {
+            $this->notifyEngineering('High Transient Error Rate', [
+                'queue' => $queue,
+                'transient_errors' => $this->transientErrors,
+                'total_processed' => $this->totalProcessed,
+                'error_rate' => round($errorRate * 100, 2) . '%',
+                'threshold' => self::TRANSIENT_ERROR_THRESHOLD * 100 . '%',
+            ]);
+        }
     }
 
     private function recordMetrics(string $eventType, string $outcome): void
