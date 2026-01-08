@@ -33,9 +33,9 @@ class SQSResolver
     {
         // Apply environment prefix
         $resolvedQueueName = $this->resolveQueueName($queueName);
-        
+
         $cacheKey = "sqs_queue_url_{$resolvedQueueName}";
-        
+
         return Cache::remember($cacheKey, now()->addDays(30), function () use ($resolvedQueueName) {
             return $this->getQueueUrl($resolvedQueueName);
         });
@@ -53,14 +53,14 @@ class SQSResolver
     /**
      * Check if queue exists without creating it
      * Uses AWS SQS getQueueUrl API - returns false if queue doesn't exist
-     * 
+     *
      * @param string $queueName Base queue name (without prefix)
      * @return bool True if queue exists, false otherwise
      */
     public function queueExists(string $queueName): bool
     {
         $resolvedQueueName = $this->resolveQueueName($queueName);
-        
+
         try {
             $this->sqsClient->getQueueUrl(['QueueName' => $resolvedQueueName]);
             return true;
@@ -83,16 +83,17 @@ class SQSResolver
             $result = $this->sqsClient->getQueueUrl([
                 'QueueName' => $queueName
             ]);
-            
+
             return $result->get('QueueUrl');
         } catch (AwsException $e) {
             if ($e->getAwsErrorCode() === 'AWS.SimpleQueueService.NonExistentQueue') {
-                Log::info('Queue does not exist, creating queue and DLQ', [
-                    'queue_name' => $queueName
-                ]);
-                return $this->createQueue($queueName);
+                if (!config('messaging.fallback_to_rabbitmq', false)) {
+                    Log::info('Queue does not exist, creating queue and DLQ', [
+                        'queue_name' => $queueName
+                    ]);
+                    return $this->createQueue($queueName);
+                }
             }
-            
             throw $e;
         }
     }
@@ -104,24 +105,24 @@ class SQSResolver
     {
         // Create DLQ first
         $dlqName = "{$queueName}-dlq";
-        
+
         $dlqResult = $this->sqsClient->createQueue([
             'QueueName' => $dlqName,
             'Attributes' => [
                 'MessageRetentionPeriod' => '1209600', // 14 days
             ],
         ]);
-        
+
         $dlqUrl = $dlqResult->get('QueueUrl');
-        
+
         // Get the DLQ ARN to attach it to the main queue
         $dlqArnResult = $this->sqsClient->getQueueAttributes([
             'QueueUrl' => $dlqUrl,
             'AttributeNames' => ['QueueArn'],
         ]);
-        
+
         $dlqArn = $dlqArnResult->get('Attributes')['QueueArn'];
-        
+
         // Create main queue with DLQ redrive policy
         $mainQueueResult = $this->sqsClient->createQueue([
             'QueueName' => $queueName,
@@ -135,16 +136,16 @@ class SQSResolver
                 ]),
             ],
         ]);
-        
+
         $queueUrl = $mainQueueResult->get('QueueUrl');
-        
+
         Log::info('Queue and DLQ created successfully', [
             'queue_name' => $queueName,
             'dlq_name' => $dlqName,
             'queue_url' => $queueUrl,
             'dlq_url' => $dlqUrl,
         ]);
-        
+
         return $queueUrl;
     }
 }
