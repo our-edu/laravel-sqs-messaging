@@ -14,8 +14,20 @@ class RabbitMqMessagingDriver implements MessagingDriverInterface
 {
     public function publish($event, string $eventClassReference = null)
     {
-        $eventClassReference::publishFromInstance($event);
-//        RabbitMqPublisherAdapter::publish($event->publishEventKey(), $event->toPublish());
+        try {
+            $eventClassReference::publishFromInstance($event);
+            Log::info('RabbitMq message published', [
+                'queue' => $event->publishEventKey(),
+                'payload' => json_encode($event->toPublish(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+            ]);
+
+        }catch (\Exception $e){
+            Log::error('RabbitMq Publish Error', [
+                'queue' => $event->publishEventKey(),
+                'payload' => json_encode($event->toPublish(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     public function getName(): string
