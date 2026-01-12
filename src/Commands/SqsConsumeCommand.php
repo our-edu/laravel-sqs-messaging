@@ -22,7 +22,7 @@ use Predis\Connection\ConnectionException as RedisConnectionException;
 /**
  * Worker command responsible for orchestrating message consumption per service queue.
  * Each command instance (per queue) is managed by Supervisor.
- * 
+ *
  * Follows LLD specification with:
  * - Long polling (20s)
  * - Message validation
@@ -69,41 +69,37 @@ class SqsConsumeCommand extends Command
     public function handle(SQSResolver $resolver): int
     {
         $queue = $this->argument('queue');
-        
+
         try {
             // Resolve Queue URL (creates if doesn't exist)
             $queueUrl = $resolver->resolve($queue);
             $consumer = new SQSConsumer($queueUrl);
-            
-            $this->info("Polling queue: {$queue}");
-            $this->line("Queue URL: {$queueUrl}");
-            
+            $this->logMessage(message: "Polling queue: {$queue}");
+            $this->logMessage(message: "Queue URL: {$queueUrl}");
             // Poll Messages (long polling - 20s wait)
             $messages = $consumer->receiveMessages(10, 20);
-            
+
             if (empty($messages)) {
-                $this->line("No messages found");
+                $this->logMessage(message: "No messages found");
                 return Command::SUCCESS; // Exit - Supervisor will restart
             }
-            
-            $this->info("Received " . count($messages) . " message(s)");
-            
+            $this->logMessage(message: "Received " . count($messages) . " message(s)");
             // Reset error counters for this polling cycle
             $this->totalProcessed = 0;
             $this->validationErrors = 0;
             $this->transientErrors = 0;
-            
+
             // Process each message
             foreach ($messages as $message) {
                 $this->processMessage($message, $consumer, $queue);
             }
-            
+
             // Check error rates after processing all messages in this batch
             if ($this->totalProcessed > 0) {
                 $this->checkValidationErrorRate($queue);
                 $this->checkTransientErrorRate($queue);
             }
-            
+
             return Command::SUCCESS; // Exit after processing - Supervisor restarts
         } catch (\Throwable $e) {
             Log::error('SQS Consume Command Error', [
@@ -111,9 +107,7 @@ class SqsConsumeCommand extends Command
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            
-            $this->error("Error: " . $e->getMessage());
-            
+            $this->logMessage(message: "SQS Consume Command Error: " . $e->getMessage(), type: 'error');
             // Exit with failure - Supervisor will restart
             return Command::FAILURE;
         }
@@ -123,54 +117,54 @@ class SqsConsumeCommand extends Command
     {
         $receiptHandle = $message['ReceiptHandle'];
         $messageId = $message['MessageId'] ?? 'unknown';
-        $receiveCount = (int) ($message['Attributes']['ApproximateReceiveCount'] ?? 1);
-        
+        $receiveCount = (int)($message['Attributes']['ApproximateReceiveCount'] ?? 1);
+
         $idempotencyKey = null;
         $eventType = null;
-        
+
         try {
             // Step 1: Decode JSON
             $body = json_decode($message['Body'], true);
-            
+
             if (json_last_error() !== JSON_ERROR_NONE) {
                 // Validation Error - Delete immediately, no retry
                 $this->totalProcessed++;
                 $this->validationErrors++;
-                
+
                 Log::warning('Invalid JSON, discarding', [
                     'queue' => $queue,
                     'message_id' => $messageId,
                     'error' => json_last_error_msg(),
                     'error_type' => 'validation_error',
                 ]);
-                
+
                 $this->recordMetrics('unknown', 'validation_error');
                 $consumer->deleteMessage($receiptHandle);
                 return;
             }
-            
+
             // Step 2: Validate MessageEnvelope
             if (!MessageEnvelope::validate($body)) {
                 // Validation Error - Delete immediately, no retry
                 $this->totalProcessed++;
                 $this->validationErrors++;
-                
+
                 Log::warning('Invalid message envelope, discarding', [
                     'queue' => $queue,
                     'message_id' => $messageId,
                     'body' => $body,
                     'error_type' => 'validation_error',
                 ]);
-                
+
                 $this->recordMetrics('unknown', 'validation_error');
                 $consumer->deleteMessage($receiptHandle);
                 return;
             }
-            
+
             $eventType = MessageEnvelope::getEventType($body);
             $payload = MessageEnvelope::unwrap($body);
             $idempotencyKey = $body['idempotency_key'];
-            
+
             // Step 3: Idempotency Check
             if ($this->isAlreadyProcessed($idempotencyKey)) {
                 Log::info('Duplicate message detected, skipping', [
@@ -179,16 +173,16 @@ class SqsConsumeCommand extends Command
                     'event_type' => $eventType,
                     'receive_count' => $receiveCount,
                 ]);
-                
+
                 // Delete duplicate message
                 $consumer->deleteMessage($receiptHandle);
                 $this->recordMetrics($eventType, 'success');
                 return;
             }
-            
+
             // Step 4: Mark as processing (with TTL to handle crashes)
             $this->markAsProcessing($idempotencyKey);
-            
+
             // Step 5: Extend visibility timeout for long-running events
             $longRunningEvents = config('sqs.long_running_events', []);
             if (in_array($eventType, $longRunningEvents)) {
@@ -198,10 +192,10 @@ class SqsConsumeCommand extends Command
                     'timeout' => 120,
                 ]);
             }
-            
+
             // Step 6: Process event
             $eventMap = config('sqs_events', []);
-            
+
             if (!isset($eventMap[$eventType])) {
                 // Not mapped - treat as permanent error (delete, alert)
                 Log::error('Event type not mapped', [
@@ -211,22 +205,22 @@ class SqsConsumeCommand extends Command
                     'available_events' => array_keys($eventMap),
                     'error_type' => 'permanent_error',
                 ]);
-                
+
                 $this->notifyEngineering('Event Type Not Mapped', [
                     'queue' => $queue,
                     'event_type' => $eventType,
                     'idempotency_key' => $idempotencyKey,
                 ]);
-                
+
                 $consumer->deleteMessage($receiptHandle);
                 $this->recordMetrics($eventType, 'permanent_error');
                 return;
             }
-            
+
             // Instantiate and call listener
             $listenerClass = $eventMap[$eventType];
             $listener = app($listenerClass);
-            
+
             if (method_exists($listener, 'handle')) {
                 // Call listener with payload
                 // Note: If listener expects an Event object, create it from payload
@@ -236,35 +230,35 @@ class SqsConsumeCommand extends Command
                 // Permanent error - listener doesn't have handle method
                 throw new \RuntimeException("Listener {$listenerClass} does not have handle method");
             }
-            
+
             // Step 7: Success - Mark as processed and acknowledge
             $this->totalProcessed++;
             $this->markAsProcessed($idempotencyKey, $eventType);
             $consumer->deleteMessage($receiptHandle);
-            
+
             $this->recordMetrics($eventType, 'success');
-            
+
             Log::info('Message processed successfully', [
                 'queue' => $queue,
                 'event_type' => $eventType,
                 'idempotency_key' => $idempotencyKey,
             ]);
-            
+
         } catch (\Throwable $e) {
             // Remove processing lock
             if ($idempotencyKey) {
                 $this->removeProcessingLock($idempotencyKey);
             }
-            
+
             // Classify and handle error
             $this->totalProcessed++;
-            
+
             if ($this->isTransientError($e)) {
                 $this->transientErrors++;
                 $this->handleTransientError($e, $eventType, $receiveCount, $queue, $idempotencyKey);
                 // Don't delete - let it retry (SQS will handle retry logic)
                 $this->recordMetrics($eventType ?? 'unknown', 'transient_error');
-                
+
             } elseif ($this->isPermanentError($e)) {
                 $this->handlePermanentError(
                     $e,
@@ -277,7 +271,7 @@ class SqsConsumeCommand extends Command
                 // Delete message (don't retry)
                 $consumer->deleteMessage($receiptHandle);
                 $this->recordMetrics($eventType ?? 'unknown', 'permanent_error');
-                
+
             } else {
                 // Unknown exception - treat as transient (safer)
                 $this->transientErrors++;
@@ -290,7 +284,7 @@ class SqsConsumeCommand extends Command
                     'receive_count' => $receiveCount,
                     'error_type' => 'unknown',
                 ]);
-                
+
                 $this->recordMetrics($eventType ?? 'unknown', 'transient_error');
                 // Don't delete - let it retry (safer approach)
             }
@@ -303,7 +297,7 @@ class SqsConsumeCommand extends Command
         if (Redis::exists("sqs:processed:{$idempotencyKey}")) {
             return true;
         }
-        
+
         // Fallback to database
         return DB::table('processed_events')
             ->where('idempotency_key', $idempotencyKey)
@@ -320,10 +314,10 @@ class SqsConsumeCommand extends Command
     {
         // Remove processing lock
         Redis::del("sqs:processing:{$idempotencyKey}");
-        
+
         // Mark as processed for 7 days (longer than message retention)
         Redis::setex("sqs:processed:{$idempotencyKey}", 86400 * 7, now()->toIso8601String());
-        
+
         // Also write to database for durability (optional but recommended)
         DB::table('processed_events')->insertOrIgnore([
             'idempotency_key' => $idempotencyKey,
@@ -345,7 +339,7 @@ class SqsConsumeCommand extends Command
                 return true;
             }
         }
-        
+
         // Check for connection/network errors by message
         $message = strtolower($e->getMessage());
         if (
@@ -356,7 +350,7 @@ class SqsConsumeCommand extends Command
         ) {
             return true;
         }
-        
+
         return false;
     }
 
@@ -367,7 +361,7 @@ class SqsConsumeCommand extends Command
                 return true;
             }
         }
-        
+
         // Check for database unique constraint violations (already processed)
         if ($e instanceof \Illuminate\Database\QueryException) {
             $code = $e->getCode();
@@ -376,7 +370,7 @@ class SqsConsumeCommand extends Command
                 return true; // Actually success - already processed at DB level
             }
         }
-        
+
         return false;
     }
 
@@ -392,20 +386,21 @@ class SqsConsumeCommand extends Command
             'max_receive_count' => 5,
             'error_type' => 'transient_error',
         ]);
-        
+
         // Message will become visible again after visibility timeout
         // SQS will automatically retry
         // After 5 failures, it moves to DLQ
     }
 
     private function handlePermanentError(
-        \Throwable $e,
-        string $receiptHandle,
+        \Throwable  $e,
+        string      $receiptHandle,
         SQSConsumer $consumer,
-        ?string $eventType,
-        ?string $idempotencyKey,
-        string $queue
-    ): void {
+        ?string     $eventType,
+        ?string     $idempotencyKey,
+        string      $queue
+    ): void
+    {
         Log::error('Permanent error detected', [
             'error' => $e->getMessage(),
             'exception' => get_class($e),
@@ -415,7 +410,7 @@ class SqsConsumeCommand extends Command
             'error_type' => 'permanent_error',
             'trace' => $e->getTraceAsString(),
         ]);
-        
+
         // Always alert for permanent errors
         $this->notifyEngineering('Permanent SQS Error', [
             'exception' => get_class($e),
@@ -424,7 +419,7 @@ class SqsConsumeCommand extends Command
             'queue' => $queue,
             'idempotency_key' => $idempotencyKey,
         ]);
-        
+
         // Message will be deleted (acknowledged) - no retry
     }
 
@@ -432,7 +427,7 @@ class SqsConsumeCommand extends Command
     {
         // Send to Slack channel
         Log::channel('slack')->critical($title, $context);
-        
+
         // You can also send to other channels (email, PagerDuty, etc.)
     }
 
@@ -446,7 +441,7 @@ class SqsConsumeCommand extends Command
         }
 
         $errorRate = $this->validationErrors / $this->totalProcessed;
-        
+
         if ($errorRate > self::VALIDATION_ERROR_THRESHOLD) {
             $this->notifyEngineering('High Validation Error Rate', [
                 'queue' => $queue,
@@ -468,7 +463,7 @@ class SqsConsumeCommand extends Command
         }
 
         $errorRate = $this->transientErrors / $this->totalProcessed;
-        
+
         if ($errorRate > self::TRANSIENT_ERROR_THRESHOLD) {
             $this->notifyEngineering('High Transient Error Rate', [
                 'queue' => $queue,
@@ -483,27 +478,27 @@ class SqsConsumeCommand extends Command
     private function recordMetrics(string $eventType, string $outcome): void
     {
         $queue = $this->argument('queue');
-        
+
         // Log metrics for observability
         Log::info('SQS Metrics', [
             'event_type' => $eventType,
             'outcome' => $outcome, // 'success', 'validation_error', 'transient_error', 'permanent_error'
             'queue' => $queue,
         ]);
-        
+
         // Send metrics to CloudWatch
         try {
             $metricsService = app(CloudWatchMetricsService::class);
-            
+
             $dimensions = [
                 'Queue' => $queue,
                 'EventType' => $eventType,
                 'Outcome' => $outcome,
             ];
-            
+
             // Increment the main counter
             $metricsService->increment('sqs.messages.processed', 1.0, $dimensions);
-            
+
             // Increment specific outcome counters
             switch ($outcome) {
                 case 'success':
@@ -539,5 +534,15 @@ class SqsConsumeCommand extends Command
             ]);
         }
     }
+
+    private function logMessage(string $message, string $type = 'info'): void
+    {
+        $this->$type(sprintf(
+            '[%s] %s',
+            now()->format('Y-m-d H:i:s'),
+            $message
+        ));
+    }
+
 }
 
