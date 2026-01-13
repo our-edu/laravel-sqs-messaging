@@ -33,7 +33,8 @@ class SQSPublisherAdapter
     {
         $eventType = $event->publishEventKey();
         $payload = method_exists($event, 'toPublish') ? $event->toPublish() : [];
-        
+        // use SQSResolver to make sure the queue name is properly existing
+        (new SQSResolver())->resolve($queueName);
         return $this->sqsPublisher->publish($queueName, $eventType, $payload);
     }
 
