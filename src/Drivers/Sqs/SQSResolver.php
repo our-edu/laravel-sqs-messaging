@@ -35,11 +35,11 @@ class SQSResolver
         // Apply environment prefix
         $resolvedQueueName = $this->resolveQueueName($queueName);
         $cacheKey = "sqs_queue_url_{$resolvedQueueName}";
-        $createQueueUrlResponse = $this->getQueueUrl($queueName);
+        $createQueueUrlResponse = $this->getQueueUrl($resolvedQueueName);
         if ($createQueueUrlResponse['status'] == 200) {
             $queueUrl = $createQueueUrlResponse['queue_url'];
         } elseif ($createQueueUrlResponse['status'] == 400) {
-            $queueUrl = $this->createQueue($queueName);
+            $queueUrl = $this->createQueue($resolvedQueueName);
         } else {
             throw new \Exception("Error retrieving queue URL: " . $createQueueUrlResponse['message']);
         }
