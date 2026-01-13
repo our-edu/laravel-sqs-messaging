@@ -28,16 +28,23 @@ class SQSResolver
     /**
      * Resolve queue URL with caching (30 days)
      * Creates queue and DLQ if they don't exist
+     * @throws \Exception
      */
     public function resolve(string $queueName): string
     {
         // Apply environment prefix
         $resolvedQueueName = $this->resolveQueueName($queueName);
-
         $cacheKey = "sqs_queue_url_{$resolvedQueueName}";
-
-        return Cache::remember($cacheKey, now()->addDays(30), function () use ($resolvedQueueName) {
-            return $this->getQueueUrl($resolvedQueueName);
+        $createQueueUrlResponse = $this->getQueueUrl($queueName);
+        if ($createQueueUrlResponse['status'] == 200) {
+            $queueUrl = $createQueueUrlResponse['queue_url'];
+        } elseif ($createQueueUrlResponse['status'] == 400) {
+            $queueUrl = $this->createQueue($queueName);
+        } else {
+            throw new \Exception("Error retrieving queue URL: " . $createQueueUrlResponse['message']);
+        }
+        return Cache::remember($cacheKey, now()->addDays(30), function () use ($queueUrl) {
+            return $queueUrl;
         });
     }
 
@@ -75,26 +82,31 @@ class SQSResolver
     /**
      * Get queue URL, create if it doesn't exist
      *
-     * @throws AwsException
      */
-    private function getQueueUrl(string $queueName): string
+    private function getQueueUrl(string $queueName): array
     {
         try {
             $result = $this->sqsClient->getQueueUrl([
                 'QueueName' => $queueName
             ]);
-
-            return $result->get('QueueUrl');
+            return [
+                'status' => 200,
+                'message' => 'Queue exists',
+                'queue_url' => $result->get('QueueUrl')
+            ];
         } catch (AwsException $e) {
             if ($e->getAwsErrorCode() === 'AWS.SimpleQueueService.NonExistentQueue') {
-                if (!config('messaging.fallback_to_rabbitmq', false)) {
-                    Log::info('Queue does not exist, creating queue and DLQ', [
-                        'queue_name' => $queueName
-                    ]);
-                    return $this->createQueue($queueName);
-                }
+                return [
+                    'status' => 400,
+                    'message' => 'Queue does not exist',
+                    'queue_url' => null
+                ];
             }
-            throw $e;
+            return [
+                'status' => 500,
+                'message' => $e->getMessage(),
+                'queue_url' => null
+            ];
         }
     }
 
@@ -103,6 +115,7 @@ class SQSResolver
      */
     private function createQueue(string $queueName): string
     {
+        try{
         // Create DLQ first
         $dlqName = "{$queueName}-dlq";
 
@@ -147,6 +160,14 @@ class SQSResolver
         ]);
 
         return $queueUrl;
+
+        }catch (\Throwable $e){
+            Log::error('Error creating queue and DLQ', [
+                'queue_name' => $queueName,
+                'error' => $e->getMessage(),
+            ]);
+            throw new \Exception("Error creating queue: ".$queueName ." with message" . $e->getMessage());
+        }
     }
 }
 
