@@ -74,8 +74,12 @@ class SqsConsumeCommand extends Command
             // Resolve Queue URL (creates if doesn't exist)
             $queueUrl = $resolver->resolve($queue);
             $consumer = new SQSConsumer($queueUrl);
-            $this->logMessage(message: "Polling queue: {$queue}");
-            $this->logMessage(message: "Queue URL: {$queueUrl}");
+            logOnSlackDataIfExists(
+                messages: [
+                    "Polling queue: {$queue}" ,
+                    "Queue URL: {$queueUrl}"
+                    ]
+            );
             // Poll Messages (long polling - 20s wait)
             $messages = $consumer->receiveMessages(10, 20);
 

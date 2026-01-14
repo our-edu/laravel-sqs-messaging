@@ -27,6 +27,9 @@
             "OurEdu\\SqsMessaging\\": "src/"
         }
     },
+    "files": [
+        "src/Helpers/helpers.php"
+    ],
     "autoload-dev": {
         "psr-4": {
             "OurEdu\\SqsMessaging\\Tests\\": "tests/"
