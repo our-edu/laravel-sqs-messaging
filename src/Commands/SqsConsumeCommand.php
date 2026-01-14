@@ -78,16 +78,24 @@ class SqsConsumeCommand extends Command
                 messages: [
                     "Polling queue: {$queue}" ,
                     "Queue URL: {$queueUrl}"
-                    ]
+                    ],
+                command: $this
             );
             // Poll Messages (long polling - 20s wait)
             $messages = $consumer->receiveMessages(10, 20);
 
             if (empty($messages)) {
-                $this->logMessage(message: "No messages found");
+                logOnSlackDataIfExists(
+                    messages: "No messages found",
+                    command: $this
+
+                );
                 return Command::SUCCESS; // Exit - Supervisor will restart
             }
-            $this->logMessage(message: "Received " . count($messages) . " message(s)");
+            logOnSlackDataIfExists(
+                messages: "Received " . count($messages) . " message(s)",
+                command: $this
+            );
             // Reset error counters for this polling cycle
             $this->totalProcessed = 0;
             $this->validationErrors = 0;
@@ -111,7 +119,6 @@ class SqsConsumeCommand extends Command
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            $this->logMessage(message: "SQS Consume Command Error: " . $e->getMessage(), type: 'error');
             // Exit with failure - Supervisor will restart
             return Command::FAILURE;
         }
@@ -135,7 +142,7 @@ class SqsConsumeCommand extends Command
                 $this->totalProcessed++;
                 $this->validationErrors++;
 
-                Log::warning('Invalid JSON, discarding', [
+                Log::error('Invalid JSON, discarding', [
                     'queue' => $queue,
                     'message_id' => $messageId,
                     'error' => json_last_error_msg(),
@@ -153,7 +160,7 @@ class SqsConsumeCommand extends Command
                 $this->totalProcessed++;
                 $this->validationErrors++;
 
-                Log::warning('Invalid message envelope, discarding', [
+                Log::error('Invalid message envelope, discarding', [
                     'queue' => $queue,
                     'message_id' => $messageId,
                     'body' => $body,
@@ -171,7 +178,7 @@ class SqsConsumeCommand extends Command
 
             // Step 3: Idempotency Check
             if ($this->isAlreadyProcessed($idempotencyKey)) {
-                Log::info('Duplicate message detected, skipping', [
+                Log::error('Duplicate message detected, skipping', [
                     'queue' => $queue,
                     'idempotency_key' => $idempotencyKey,
                     'event_type' => $eventType,
@@ -191,7 +198,7 @@ class SqsConsumeCommand extends Command
             $longRunningEvents = config('sqs.long_running_events', []);
             if (in_array($eventType, $longRunningEvents)) {
                 $consumer->changeVisibilityTimeout($receiptHandle, 120); // 2 minutes
-                Log::info('Extended visibility timeout for long-running event', [
+                Log::error('Extended visibility timeout for long-running event', [
                     'event_type' => $eventType,
                     'timeout' => 120,
                 ]);
@@ -242,7 +249,7 @@ class SqsConsumeCommand extends Command
 
             $this->recordMetrics($eventType, 'success');
 
-            Log::info('Message processed successfully', [
+            Log::error('Message processed successfully', [
                 'queue' => $queue,
                 'event_type' => $eventType,
                 'idempotency_key' => $idempotencyKey,
@@ -380,7 +387,7 @@ class SqsConsumeCommand extends Command
 
     private function handleTransientError(\Throwable $e, ?string $eventType, int $receiveCount, string $queue, ?string $idempotencyKey): void
     {
-        Log::warning('Transient error, message will retry', [
+        Log::error('Transient error, message will retry', [
             'error' => $e->getMessage(),
             'exception' => get_class($e),
             'event_type' => $eventType ?? 'unknown',
@@ -531,21 +538,12 @@ class SqsConsumeCommand extends Command
             }
         } catch (\Throwable $e) {
             // Don't let metrics failure break message processing
-            Log::warning('Failed to send CloudWatch metrics', [
+            Log::error('Failed to send CloudWatch metrics', [
                 'error' => $e->getMessage(),
                 'event_type' => $eventType,
                 'outcome' => $outcome,
             ]);
         }
-    }
-
-    private function logMessage(string $message, string $type = 'info'): void
-    {
-        $this->$type(sprintf(
-            '[%s] %s',
-            now()->format('Y-m-d H:i:s'),
-            $message
-        ));
     }
 
 }
