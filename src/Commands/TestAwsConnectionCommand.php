@@ -16,8 +16,8 @@ class TestAwsConnectionCommand extends Command
         $this->line('');
 
         // Get credentials
-        $key = config('aws.key', env('SQS_AWS_ACCESS_KEY_ID'));
-        $secret = config('aws.secret', env('SQS_AWS_SECRET_ACCESS_KEY'));
+        $key = config('aws.key', env('AWS_SQS_ACCESS_KEY_ID'));
+        $secret = config('aws.secret', env('AWS_SQS_SECRET_ACCESS_KEY'));
         $region = config('aws.region', env('AWS_DEFAULT_REGION', 'us-east-2'));
 
         // Display config (without showing full secret)
@@ -40,8 +40,8 @@ class TestAwsConnectionCommand extends Command
             $this->line('   Check your .env file - credentials might be swapped.');
             $this->line('');
             $this->line('   Correct format:');
-            $this->line('   SQS_AWS_ACCESS_KEY_ID=AKIA...');
-            $this->line('   SQS_AWS_SECRET_ACCESS_KEY=rhrz...');
+            $this->line('   AWS_SQS_ACCESS_KEY_ID=AKIA...');
+            $this->line('   AWS_SQS_SECRET_ACCESS_KEY=rhrz...');
             $this->line('');
         }
 
@@ -49,8 +49,8 @@ class TestAwsConnectionCommand extends Command
             $this->error('❌ AWS credentials are missing in .env file!');
             $this->line('');
             $this->line('Please add to your .env file:');
-            $this->line('SQS_AWS_ACCESS_KEY_ID=your-key-here');
-            $this->line('SQS_AWS_SECRET_ACCESS_KEY=your-secret-here');
+            $this->line('AWS_SQS_ACCESS_KEY_ID=your-key-here');
+            $this->line('AWS_SQS_SECRET_ACCESS_KEY=your-secret-here');
             $this->line('AWS_DEFAULT_REGION=your-region-here');
             return Command::FAILURE;
         }
@@ -93,8 +93,8 @@ class TestAwsConnectionCommand extends Command
             $this->error('❌ Credentials Error: ' . $e->getMessage());
             $this->line('');
             $this->line('Possible issues:');
-            $this->line('  1. SQS_AWS_ACCESS_KEY_ID is incorrect');
-            $this->line('  2. SQS_AWS_SECRET_ACCESS_KEY is incorrect');
+            $this->line('  1. AWS_SQS_ACCESS_KEY_ID is incorrect');
+            $this->line('  2. AWS_SQS_SECRET_ACCESS_KEY is incorrect');
             $this->line('  3. Credentials have been revoked/deleted');
             $this->line('');
             $this->line('Please check your .env file and AWS IAM console.');

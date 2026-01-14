@@ -73,8 +73,8 @@ Your IAM user/role needs these permissions:
 
 ```env
 # AWS Authentication (REQUIRED)
-SQS_AWS_ACCESS_KEY_ID=your-production-access-key
-SQS_AWS_SECRET_ACCESS_KEY=your-production-secret-key
+AWS_SQS_ACCESS_KEY_ID=your-production-access-key
+AWS_SQS_SECRET_ACCESS_KEY=your-production-secret-key
 AWS_DEFAULT_REGION=us-east-2
 
 # Production Settings
