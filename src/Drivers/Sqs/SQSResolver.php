@@ -19,8 +19,8 @@ class SQSResolver
             'region' => config('aws.region', env('AWS_DEFAULT_REGION', 'us-east-2')),
             'version' => 'latest',
             'credentials' => [
-                'key' => config('aws.key', env('AWS_ACCESS_KEY_ID')),
-                'secret' => config('aws.secret', env('AWS_SECRET_ACCESS_KEY')),
+                'key' => config('aws.key', env('SQS_AWS_ACCESS_KEY_ID')),
+                'secret' => config('aws.secret', env('SQS_AWS_SECRET_ACCESS_KEY')),
             ],
         ]);
     }

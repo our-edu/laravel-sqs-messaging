@@ -59,8 +59,8 @@ Add to your `.env`:
 
 ```env
 # AWS Credentials (required)
-AWS_ACCESS_KEY_ID=your-access-key
-AWS_SECRET_ACCESS_KEY=your-secret-key
+SQS_AWS_ACCESS_KEY_ID=your-access-key
+SQS_AWS_SECRET_ACCESS_KEY=your-secret-key
 AWS_DEFAULT_REGION=me-central-1
 
 # SQS Configuration
