@@ -231,7 +231,15 @@ class SqsConsumeCommand extends Command
             // Instantiate and call listener
             $listenerClass = $eventMap[$eventType];
             $listener = app($listenerClass);
-
+            logOnSlackDataIfExists(
+                messages: 'processing received message',
+                command: $this,
+                context: [
+                'queue' => $queue,
+                'event_type' => $eventType,
+                'payload' => $payload,
+                'idempotency_key' => $idempotencyKey,
+            ]);
             if (method_exists($listener, 'handle')) {
                 // Call listener with payload
                 // Note: If listener expects an Event object, create it from payload

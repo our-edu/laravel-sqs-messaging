@@ -25,43 +25,28 @@ if (!function_exists('logWithFallback')) {
 if (!function_exists('logOnSlackDataIfExists')) {
     function logOnSlackDataIfExists(
         string|array $messages,
-        ?Command     $command = null,
-        array        $context = []
-    ): void
-    {
-        if (config('messaging.logging_on_slack')) {
-            if (is_array($messages) and !empty($messages)) {
-                foreach ($messages as $message) {
-                    logWithFallback(channel: 'slackLogData',
-                        level: 'error',
-                        message: $message,
-                        context: $context
-                    );
-                }
-            } elseif (is_string($messages)) {
-                logWithFallback(channel: 'slackLogData',
+        ?Command $command = null,
+        array $context = []
+    ): void {
+        if (empty($messages)) {
+            return;
+        }
+        $messages = is_array($messages) ? $messages : [$messages];
+        $shouldLogOnSlack = config('messaging.logging_on_slack') || $command === null;
+        foreach ($messages as $message) {
+            if ($shouldLogOnSlack) {
+                logWithFallback(
+                    channel: 'slackLogData',
                     level: 'error',
-                    message: $messages,
+                    message: $message,
                     context: $context
                 );
-            }
-        } else {
-            if ($command !== null) {
-                if (is_array($messages) and !empty($messages)) {
-                    foreach ($messages as $message) {
-                        $command->error(sprintf(
-                            '[%s] %s',
-                            now()->format('Y-m-d H:i:s'),
-                            $message
-                        ));
-                    }
-                } elseif (is_string($messages)) {
-                    $command->error(sprintf(
-                        '[%s] %s',
-                        now()->format('Y-m-d H:i:s'),
-                        $messages
-                    ));
-                }
+            } else {
+                $command->error(sprintf(
+                    '[%s] %s',
+                    now()->format('Y-m-d H:i:s'),
+                    $message
+                ));
             }
         }
     }

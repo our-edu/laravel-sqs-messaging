@@ -97,10 +97,16 @@ class MessagingService
      */
     public function publish($event, $eventClassReference)
     {
+        logOnSlackDataIfExists(messages: 'start publish message in MessagingService',
+            context: [
+                'queue name' => method_exists($event, 'publishEventKey') ? $event->publishEventKey() : get_class($event),
+                'payload' => method_exists($event, 'toPublish') ? $event->toPublish() : [],
+            ]);
         $dualWrite = config('messaging.dual_write', false);
         $fallbackEnabled = config('messaging.fallback_to_rabbitmq', false);
         // Dual write mode: publish to both SQS and RabbitMQ
         if ($dualWrite && $this->driver === DriversEnum::SQS && isset($this->drivers[DriversEnum::RabbitMQ])) {
+            logOnSlackDataIfExists('dual write is enabled in MessagingService');
             $sqsResult = null;
             $rabbitmqResult = null;
 
@@ -117,7 +123,7 @@ class MessagingService
 
             // Also publish to RabbitMQ
             try {
-                $rabbitmqDriver = $this->getDriverInstance(DriversEnum::RabbitMQ , $eventClassReference);
+                $rabbitmqDriver = $this->getDriverInstance(DriversEnum::RabbitMQ, $eventClassReference);
                 $rabbitmqResult = $rabbitmqDriver->publish($event, $eventClassReference);
             } catch (\Throwable $e) {
                 Log::warning('Dual write: RabbitMQ publish failed', [
@@ -132,13 +138,14 @@ class MessagingService
         // Normal mode: single driver
         // If fallback enabled and SQS driver, check queue existence first to prevent auto-creation
         if ($fallbackEnabled && $this->driver === DriversEnum::SQS && isset($this->drivers[DriversEnum::RabbitMQ])) {
+            logOnSlackDataIfExists(messages: 'fallback to RabbitMQ is enabled in MessagingService');
             $eventType = method_exists($event, 'publishEventKey') ? $event->publishEventKey() : null;
-            
+
             if ($eventType) {
                 // Resolve queue name from event type (same as SQS driver does)
                 $queueName = \OurEdu\SqsMessaging\Drivers\Sqs\SQSTargetQueueResolver::resolve($eventType);
                 $sqsResolver = app(\OurEdu\SqsMessaging\Drivers\Sqs\SQSResolver::class);
-                
+
                 // If queue doesn't exist, skip SQS and send to RabbitMQ only
                 if (!$sqsResolver->queueExists($queueName)) {
                     $rabbitmqDriver = $this->getDriverInstance(DriversEnum::RabbitMQ, $eventClassReference);
@@ -146,7 +153,7 @@ class MessagingService
                 }
             }
         }
-        
+
         try {
             return $this->activeDriver->publish($event);
         } catch (\Throwable $e) {
