@@ -74,27 +74,19 @@ class SqsConsumeCommand extends Command
             // Resolve Queue URL (creates if doesn't exist)
             $queueUrl = $resolver->resolve($queue);
             $consumer = new SQSConsumer($queueUrl);
-            logOnSlackDataIfExists(
-                messages: [
-                    "Polling queue: {$queue}" ,
-                    "Queue URL: {$queueUrl}"
-                    ],
-                command: $this
-            );
+            $this->logMessage(message: "Polling queue: {$queue}");
+            $this->logMessage(message: "Queue URL: {$queueUrl}");
             // Poll Messages (long polling - 20s wait)
             $messages = $consumer->receiveMessages(10, 20);
 
             if (empty($messages)) {
-                logOnSlackDataIfExists(
-                    messages: "No messages found",
-                    command: $this
-
-                );
+                $this->logMessage(message: "No messages found");
                 return Command::SUCCESS; // Exit - Supervisor will restart
             }
             logOnSlackDataIfExists(
                 messages: "Received " . count($messages) . " message(s)",
-                command: $this
+                command: $this,
+                context: $messages
             );
             // Reset error counters for this polling cycle
             $this->totalProcessed = 0;
@@ -553,6 +545,13 @@ class SqsConsumeCommand extends Command
             ]);
         }
     }
-
+    private function logMessage(string $message, string $type = 'info'): void
+    {
+        $this->$type(sprintf(
+            '[%s] %s',
+            now()->format('Y-m-d H:i:s'),
+            $message
+        ));
+    }
 }
 
