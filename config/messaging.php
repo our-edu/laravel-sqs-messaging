@@ -43,5 +43,15 @@ return [
     */
 
     'fallback_to_rabbitmq' => env('MESSAGING_FALLBACK_TO_RABBITMQ', false),
+
+    /*
+
+      |--------------------------------------------------------------------------
+      | Logging on Slack
+      |--------------------------------------------------------------------------
+      |
+      | When enabled, messaging events and errors are logged to Slack channel.
+     * */
+    'logging_on_slack' => env('MESSAGING_LOGGING_ON_SLACK', false),
 ];
 

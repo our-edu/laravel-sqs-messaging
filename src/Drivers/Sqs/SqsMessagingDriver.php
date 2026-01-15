@@ -20,8 +20,21 @@ class SqsMessagingDriver implements MessagingDriverInterface
 
     public function publish($event, string $eventClassReference = null): string
     {
-        $queueName = SQSTargetQueueResolver::resolve($event->publishEventKey());
-        return $this->adapter->publish($event, $queueName);
+        try {
+            $queueName = SQSTargetQueueResolver::resolve($event->publishEventKey());
+            logOnSlackDataIfExists(messages: 'Publishing to SQS', context: [
+                'queue' => $queueName,
+                'payload' => $event->toPublish(),
+            ]);
+            return $this->adapter->publish($event, $queueName);
+        }catch (\Exception $exception){
+            Log::error('SQS Publish Error', [
+                'queue' => isset($queueName) ? $queueName : 'unknown',
+                'payload' => method_exists($event, 'toPublish') ? $event->toPublish() : [],
+                'error' => $exception->getMessage(),
+            ]);
+            throw $exception;
+        }
     }
 
     public function getName(): string
