@@ -32,16 +32,15 @@ if (!function_exists('logOnSlackDataIfExists')) {
             return;
         }
         $messages = is_array($messages) ? $messages : [$messages];
-        $shouldLogOnSlack = config('messaging.logging_on_slack') || $command === null;
         foreach ($messages as $message) {
-            if ($shouldLogOnSlack) {
+            if (config('messaging.logging_on_slack')) {
                 logWithFallback(
                     channel: 'slackLogData',
                     level: 'error',
                     message: $message,
                     context: $context
                 );
-            } else {
+            } if ($command != null) {
                 $command->error(sprintf(
                     '[%s] %s',
                     now()->format('Y-m-d H:i:s'),

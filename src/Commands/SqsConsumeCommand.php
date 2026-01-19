@@ -249,12 +249,15 @@ class SqsConsumeCommand extends Command
 
             $this->recordMetrics($eventType, 'success');
 
-            Log::error('Message processed successfully', [
-                'queue' => $queue,
-                'event_type' => $eventType,
-                'idempotency_key' => $idempotencyKey,
-            ]);
-
+            logOnSlackDataIfExists(
+                messages: 'Message processed successfully',
+                command: $this,
+                context: [
+                    'queue' => $queue,
+                    'event_type' => $eventType,
+                    'idempotency_key' => $idempotencyKey,
+                    'payload' => $payload,
+                ]);
         } catch (\Throwable $e) {
             // Remove processing lock
             if ($idempotencyKey) {
