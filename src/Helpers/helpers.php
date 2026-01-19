@@ -46,7 +46,11 @@ if (!function_exists('logOnSlackDataIfExists')) {
                     '[%s] %s',
                     now()->format('Y-m-d H:i:s'),
                     $message
-                )  , $context);
+                ));
+                if (!empty($context)) {
+                    $command->line("\nContext:");
+                    $command->line(json_encode($context, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+                }
             }
         }
     }
