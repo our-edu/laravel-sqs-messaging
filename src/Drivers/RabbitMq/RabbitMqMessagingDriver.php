@@ -28,6 +28,7 @@ class RabbitMqMessagingDriver implements MessagingDriverInterface
             Log::error('RabbitMq Publish Error', [
                 'queue' => $event->publishEventKey(),
                 'payload' => json_encode($event->toPublish(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                'event_class' => $eventClassReference,
                 'error' => $e->getMessage(),
             ]);
         }
