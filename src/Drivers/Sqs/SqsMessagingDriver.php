@@ -29,7 +29,7 @@ class SqsMessagingDriver implements MessagingDriverInterface
         return DriversEnum::SQS;
     }
 
-    public function isAvailable(string $eventClassReference = null): bool
+    public function isAvailable(): bool
     {
         try {
             // Check if SQS adapter can be instantiated

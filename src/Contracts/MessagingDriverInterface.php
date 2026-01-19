@@ -31,6 +31,6 @@ interface MessagingDriverInterface
      * 
      * @return bool
      */
-    public function isAvailable(string $eventClassReference = null): bool;
+    public function isAvailable(): bool;
 }
 
