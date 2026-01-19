@@ -22,29 +22,6 @@ A comprehensive Laravel package for AWS SQS messaging with RabbitMQ rollback sup
 composer require our-edu/laravel-sqs-messaging:1.*
 ```
 
-### Via VCS Repository (For Development)
-
-Add to your `composer.json`:
-
-```json
-{
-    "repositories": {
-        "laravel-sqs-messaging": {
-            "type": "vcs",
-            "url": "https://github.com/our-edu/laravel-sqs-messaging"
-        }
-    },
-    "require": {
-        "our-edu/laravel-sqs-messaging": "1.*"
-    }
-}
-```
-
-Then run:
-```bash
-composer require our-edu/laravel-sqs-messaging:1.*
-```
-
 ## Configuration
 
 ### 1. Publish Configuration
