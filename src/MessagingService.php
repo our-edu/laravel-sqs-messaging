@@ -147,7 +147,7 @@ class MessagingService
         }
         
         try {
-            return $this->activeDriver->publish($event);
+            return $this->activeDriver->publish($event , $eventClassReference);
         } catch (\Throwable $e) {
             // Fallback to RabbitMQ if enabled
             if ($fallbackEnabled && $this->driver !== DriversEnum::RabbitMQ && isset($this->drivers[DriversEnum::RabbitMQ])) {
