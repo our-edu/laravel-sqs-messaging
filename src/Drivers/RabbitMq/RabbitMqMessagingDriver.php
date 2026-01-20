@@ -15,6 +15,9 @@ class RabbitMqMessagingDriver implements MessagingDriverInterface
     public function publish($event, string $eventClassReference = null)
     {
         try {
+            if ($eventClassReference === null) {
+                throw new \RuntimeException("Event class reference is required for RabbitMQ publishing.");
+            }
             $eventClassReference::publishFromInstance($event);
             Log::info('RabbitMq message published', [
                 'queue' => $event->publishEventKey(),
@@ -25,6 +28,7 @@ class RabbitMqMessagingDriver implements MessagingDriverInterface
             Log::error('RabbitMq Publish Error', [
                 'queue' => $event->publishEventKey(),
                 'payload' => json_encode($event->toPublish(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                'event_class' => $eventClassReference,
                 'error' => $e->getMessage(),
             ]);
         }
@@ -35,14 +39,9 @@ class RabbitMqMessagingDriver implements MessagingDriverInterface
         return DriversEnum::RabbitMQ;
     }
 
-    public function isAvailable(string $eventClassReference = null): bool
+    public function isAvailable(): bool
     {
-        try {
-            return !empty($eventClassReference) ?? false;
-        } catch (\Throwable $e) {
-            Log::warning('RabbitMq driver not available', ['error' => $e->getMessage()]);
-            return false;
-        }
+      return true;
     }
 }
 
