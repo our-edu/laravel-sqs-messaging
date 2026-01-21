@@ -16,33 +16,10 @@ A comprehensive Laravel package for AWS SQS messaging with RabbitMQ rollback sup
 
 ## Installation
 
-### Option 1: Via Composer (Recommended for Production)
+### Via Composer
 
 ```bash
-composer require ouredu/laravel-sqs-messaging
-```
-
-### Option 2: Via Path Repository (For Development)
-
-Add to your `composer.json`:
-
-```json
-{
-    "repositories": {
-      "laravel-sqs-messaging": {
-        "type": "vcs",
-        "url": "https://github.com/our-edu/laravel-sqs-messaging"
-      }
-    },
-    "require": {
-        "ouredu/laravel-sqs-messaging": "*"
-    }
-}
-```
-
-Then run:
-```bash
-composer require ouredu/laravel-sqs-messaging
+composer require our-edu/laravel-sqs-messaging:1.*
 ```
 
 ## Configuration
@@ -66,10 +43,16 @@ AWS_DEFAULT_REGION=me-central-1
 # SQS Configuration
 SQS_QUEUE_PREFIX=staging  # or production, dev, etc.
 
+# Messaging Driver
+MESSAGING_DRIVER=sqs        # Use SQS (default) or rabbitmq for rollback
+MESSAGING_FALLBACK_TO_RABBITMQ=true  # Enable fallback to RabbitMQ when SQS queue doesn't exist
+
 # CloudWatch Metrics (optional)
 SQS_CLOUDWATCH_ENABLED=true
 SQS_CLOUDWATCH_NAMESPACE=SQS/PaymentService
 ```
+
+**Note:** Set `MESSAGING_FALLBACK_TO_RABBITMQ=true` if you have other projects still using RabbitMQ. This ensures messages go to RabbitMQ when SQS queue doesn't exist.
 
 ### 3. Configure Queues
 
@@ -111,26 +94,35 @@ This creates the `processed_events` table for idempotency.
 php artisan sqs:ensure
 ```
 
+**For Production:** Add this to your `entrypoint.sh` or container startup script to ensure queues exist before starting consumers:
+
+```bash
+php artisan sqs:ensure || echo "Warning: SQS queue ensure failed, but continuing startup..."
+```
+
 ## Usage
 
 ### Publishing Messages
-### Option 1: Use Unified MessagingService (Recommended)
 
-The package includes a `MessagingService` that can switch between available drivers ( SQS and RabbitMQ ):
+#### Option 1: Use Unified MessagingService (Recommended)
 
-update your Support\RabbitMQ\Publishable trait and add the following method:
+The package includes a `MessagingService` that can switch between available drivers (SQS and RabbitMQ).
+
+**Step 1:** Update your `Support\RabbitMQ\Publishable` trait and add the following method:
 
 ```php
-   public static function publishFromInstance(object $event): void
-    {
-        Container::getInstance()
-            ->make(Publisher::class)
-            ->publish($event);
-    }
+public static function publishFromInstance(object $event): void
+{
+    Container::getInstance()
+        ->make(Publisher::class)
+        ->publish($event);
+}
 ```
-to be 
+
+**Complete updated trait:**
+
 ```php
-   <?php
+<?php
 
 declare(strict_types=1);
 
@@ -151,6 +143,7 @@ trait Publishable
             ->make(Publisher::class)
             ->publish(new static(...func_get_args()));
     }
+    
     public static function publishFromInstance(object $event): void
     {
         Container::getInstance()
@@ -158,25 +151,26 @@ trait Publishable
             ->publish($event);
     }
 }
-
 ```
 
-Then
+**Step 2:** In your listeners where you publish a message, replace RabbitMQ publishing code:
 
-in your listeners in which you publish a message, replace RabbitMQ publishing code :
+**Old RabbitMQ Publisher:**
 ```php
-        Notification::publish($queuName, $payload)
+Notification::publish($queueName, $payload)
 ```
 
-with
+**New MessagingService Publisher:**
 ```php
-     app(MessagingService::class)->publish(
-            event: new Notification($queuName, $payload),
-            eventClassReference: Notification::class
-        );
+app(MessagingService::class)->publish(
+    event: new Notification($queueName, $payload),
+    eventClassReference: Notification::class
+);
 ```
-### Example:
-#### Old RabbitMQ Publisher:
+
+**Example Migration:**
+
+**Old RabbitMQ Listener:**
 ```php
 namespace Domain\Payments\Listeners\ReversePaymentRequest;
 
@@ -200,19 +194,9 @@ class ReversePaymentRequestCreatedListener
         ReversePaymentRequestNotification::publish($event->reversePaymentRequest, $usersUuids);
     }
 }
-
 ```
-Replace
 
-    ReversePaymentRequestNotification::publish($event->reversePaymentRequest, $usersUuids);
-with :
-
-      app(MessagingService::class)->publish(
-            event: new ReversePaymentRequestNotification(queueName: $this->queueName, payload: $event->students),
-            eventClassReference: ReversePaymentRequestNotification::class
-        );
-#### New Listener using MessagingService:
-
+**New Listener using MessagingService:**
 ```php
 namespace Domain\Payments\Listeners\ReversePaymentRequest;
 
@@ -221,6 +205,7 @@ use Domain\Models\User;
 use Domain\Payments\Events\ReversePaymentRequest\ReversePaymentRequestCreatedEvent;
 use Domain\Payments\Notifications\ReversePaymentRequestNotification;
 use Illuminate\Contracts\Container\BindingResolutionException;
+use OurEdu\SqsMessaging\MessagingService;
 
 class ReversePaymentRequestCreatedListener
 {
@@ -234,9 +219,8 @@ class ReversePaymentRequestCreatedListener
         })->get();
         $usersUuids = $users->pluck('uuid')->toArray();
         
-        
-        // new messaging service publish
-         app(MessagingService::class)->publish(
+        // New messaging service publish
+        app(MessagingService::class)->publish(
             event: new ReversePaymentRequestNotification(queueName: $this->queueName, payload: $event->students),
             eventClassReference: ReversePaymentRequestNotification::class
         );
@@ -250,8 +234,10 @@ MESSAGING_DRIVER=sqs        # Use SQS (default)
 MESSAGING_DRIVER=rabbitmq   # Rollback to RabbitMQ
 ```
 
-### Option 2: Direct SQS Adapter
-HINT : This approach will publish directly to SQS
+#### Option 2: Direct SQS Adapter
+
+**HINT:** This approach will publish directly to SQS (bypasses driver switching):
+
 ```php
 use App\Events\StudentEnrolled;
 use OurEdu\SqsMessaging\Drivers\Sqs\SQSPublisherAdapter;
@@ -274,7 +260,7 @@ numprocs=2
 stdout_logfile=/var/www/storage/logs/payment-consumer.log
 ```
 
-### Available Commands
+## Available Commands
 
 ```bash
 # Ensure all queues exist
@@ -282,6 +268,9 @@ php artisan sqs:ensure
 
 # Consume messages from a queue
 php artisan sqs:consume {queue}
+
+# Test AWS connection
+php artisan sqs:test:connection
 
 # Inspect DLQ messages
 php artisan sqs:inspect-dlq {queue}
@@ -303,6 +292,37 @@ See `ROLLBACK_GUIDE.md` for detailed instructions on:
 - Cleaning up RabbitMQ code once SQS is stable
 - Dual write mode for gradual migration
 
+## Production Deployment
+
+### Ensure Queues Before Startup
+
+Add to your production `entrypoint.sh` or container startup script:
+
+```bash
+php artisan sqs:ensure || echo "Warning: SQS queue ensure failed, but continuing startup..."
+```
+
+This ensures all required SQS queues and DLQs exist before starting consumers or the application.
+
+### Production Environment Variables
+
+```env
+# AWS Authentication (REQUIRED)
+AWS_SQS_ACCESS_KEY_ID=your-production-access-key
+AWS_SQS_SECRET_ACCESS_KEY=your-production-secret-key
+AWS_DEFAULT_REGION=us-east-2
+
+# Production Settings
+SQS_QUEUE_PREFIX=production
+SQS_AUTO_ENSURE=false              # Disable auto-creation in production
+SQS_CLOUDWATCH_ENABLED=true        # Enable monitoring
+MESSAGING_DRIVER=sqs               # Use SQS
+MESSAGING_DUAL_WRITE=false         # Disable dual write
+MESSAGING_FALLBACK_TO_RABBITMQ=true  # Enable fallback to resolve other projects that work with rabbitmq
+```
+
+For detailed production deployment guide, see `DEPLOYMENT.md`.
+
 ## Requirements
 
 - PHP ^8.1
@@ -318,4 +338,3 @@ MIT
 ## Support
 
 For issues and questions, please contact the OurEdu development team.
-

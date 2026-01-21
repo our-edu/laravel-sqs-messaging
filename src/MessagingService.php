@@ -59,11 +59,10 @@ class MessagingService
      * Get driver instance by name
      *
      * @param string $driverName
-     * @param string|null $eventClassReference
      * @return MessagingDriverInterface
      * @throws \RuntimeException
      */
-    private function getDriverInstance(string $driverName, ?string $eventClassReference = null): MessagingDriverInterface
+    private function getDriverInstance(string $driverName): MessagingDriverInterface
     {
         if (!isset($this->drivers[$driverName])) {
             throw new \RuntimeException("Messaging driver '{$driverName}' is not registered.");
@@ -71,7 +70,7 @@ class MessagingService
 
         $driver = $this->drivers[$driverName];
 
-        if (!$driver->isAvailable($eventClassReference)) {
+        if (!$driver->isAvailable()) {
             // Fallback to SQS if configured driver is not available
             if ($driverName !== DriversEnum::SQS && isset($this->drivers[DriversEnum::SQS])) {
                 Log::warning("Driver '{$driverName}' not available, falling back to SQS");
@@ -112,7 +111,7 @@ class MessagingService
 
             // Always publish to SQS
             try {
-                $sqsDriver = $this->getDriverInstance(DriversEnum::SQS, $eventClassReference);
+                $sqsDriver = $this->getDriverInstance(DriversEnum::SQS);
                 $sqsResult = $sqsDriver->publish($event);
             } catch (\Throwable $e) {
                 Log::error('Dual write: SQS publish failed', [
@@ -123,7 +122,7 @@ class MessagingService
 
             // Also publish to RabbitMQ
             try {
-                $rabbitmqDriver = $this->getDriverInstance(DriversEnum::RabbitMQ, $eventClassReference);
+                $rabbitmqDriver = $this->getDriverInstance(DriversEnum::RabbitMQ);
                 $rabbitmqResult = $rabbitmqDriver->publish($event, $eventClassReference);
             } catch (\Throwable $e) {
                 Log::warning('Dual write: RabbitMQ publish failed', [
@@ -148,18 +147,18 @@ class MessagingService
 
                 // If queue doesn't exist, skip SQS and send to RabbitMQ only
                 if (!$sqsResolver->queueExists($queueName)) {
-                    $rabbitmqDriver = $this->getDriverInstance(DriversEnum::RabbitMQ, $eventClassReference);
+                    $rabbitmqDriver = $this->getDriverInstance(DriversEnum::RabbitMQ);
                     return $rabbitmqDriver->publish($event, $eventClassReference);
                 }
             }
         }
 
         try {
-            return $this->activeDriver->publish($event);
+            return $this->activeDriver->publish($event , $eventClassReference);
         } catch (\Throwable $e) {
             // Fallback to RabbitMQ if enabled
             if ($fallbackEnabled && $this->driver !== DriversEnum::RabbitMQ && isset($this->drivers[DriversEnum::RabbitMQ])) {
-                $rabbitmqDriver = $this->getDriverInstance(DriversEnum::RabbitMQ, $eventClassReference);
+                $rabbitmqDriver = $this->getDriverInstance(DriversEnum::RabbitMQ);
                 return $rabbitmqDriver->publish($event, $eventClassReference);
             }
             throw $e;
