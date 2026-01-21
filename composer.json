@@ -27,19 +27,22 @@
             "OurEdu\\SqsMessaging\\": "src/"
         }
     },
-    "autoload-dev": {
-        "psr-4": {
-            "OurEdu\\SqsMessaging\\Tests\\": "tests/"
-        }
-    },
-    "extra": {
-        "laravel": {
-            "providers": [
-                "OurEdu\\SqsMessaging\\SqsMessagingServiceProvider"
-            ]
-        }
-    },
-    "minimum-stability": "dev",
-    "prefer-stable": true
+    "files": [
+      "src/Helpers/helpers.php"
+    ],
+  "autoload-dev": {
+    "psr-4": {
+      "OurEdu\\SqsMessaging\\Tests\\": "tests/"
+    }
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "OurEdu\\SqsMessaging\\SqsMessagingServiceProvider"
+      ]
+    }
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true
 }
 

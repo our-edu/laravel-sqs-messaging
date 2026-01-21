@@ -83,7 +83,11 @@ class SqsConsumeCommand extends Command
                 $this->logMessage(message: "No messages found");
                 return Command::SUCCESS; // Exit - Supervisor will restart
             }
-            $this->logMessage(message: "Received " . count($messages) . " message(s)");
+            logOnSlackDataIfExists(
+                messages: "Received " . count($messages) . " message(s)",
+                command: $this,
+                context: $messages
+            );
             // Reset error counters for this polling cycle
             $this->totalProcessed = 0;
             $this->validationErrors = 0;
@@ -104,10 +108,10 @@ class SqsConsumeCommand extends Command
         } catch (\Throwable $e) {
             Log::error('SQS Consume Command Error', [
                 'queue' => $queue,
+                'messages' => $messages,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            $this->logMessage(message: "SQS Consume Command Error: " . $e->getMessage(), type: 'error');
             // Exit with failure - Supervisor will restart
             return Command::FAILURE;
         }
@@ -131,9 +135,10 @@ class SqsConsumeCommand extends Command
                 $this->totalProcessed++;
                 $this->validationErrors++;
 
-                Log::warning('Invalid JSON, discarding', [
+                Log::error('Invalid JSON, discarding', [
                     'queue' => $queue,
                     'message_id' => $messageId,
+                    'body' => $body,
                     'error' => json_last_error_msg(),
                     'error_type' => 'validation_error',
                 ]);
@@ -149,7 +154,7 @@ class SqsConsumeCommand extends Command
                 $this->totalProcessed++;
                 $this->validationErrors++;
 
-                Log::warning('Invalid message envelope, discarding', [
+                Log::error('Invalid message envelope, discarding', [
                     'queue' => $queue,
                     'message_id' => $messageId,
                     'body' => $body,
@@ -166,10 +171,11 @@ class SqsConsumeCommand extends Command
             $idempotencyKey = $body['idempotency_key'];
 
             // Step 3: Idempotency Check
-            if ($this->isAlreadyProcessed($idempotencyKey)) {
-                Log::info('Duplicate message detected, skipping', [
+            if ($this->isAlreadyProcessed($idempotencyKey) || $this->isAlreadyProcessing($idempotencyKey) ) {
+                Log::error('Duplicate message detected, skipping', [
                     'queue' => $queue,
                     'idempotency_key' => $idempotencyKey,
+                    'payload' => $payload,
                     'event_type' => $eventType,
                     'receive_count' => $receiveCount,
                 ]);
@@ -187,8 +193,9 @@ class SqsConsumeCommand extends Command
             $longRunningEvents = config('sqs.long_running_events', []);
             if (in_array($eventType, $longRunningEvents)) {
                 $consumer->changeVisibilityTimeout($receiptHandle, 120); // 2 minutes
-                Log::info('Extended visibility timeout for long-running event', [
+                Log::error('Extended visibility timeout for long-running event', [
                     'event_type' => $eventType,
+                    'payload' => $payload,
                     'timeout' => 120,
                 ]);
             }
@@ -201,6 +208,7 @@ class SqsConsumeCommand extends Command
                 Log::error('Event type not mapped', [
                     'queue' => $queue,
                     'event_type' => $eventType,
+                    'payload' => $payload,
                     'idempotency_key' => $idempotencyKey,
                     'available_events' => array_keys($eventMap),
                     'error_type' => 'permanent_error',
@@ -220,7 +228,15 @@ class SqsConsumeCommand extends Command
             // Instantiate and call listener
             $listenerClass = $eventMap[$eventType];
             $listener = app($listenerClass);
-
+            logOnSlackDataIfExists(
+                messages: 'processing received message',
+                command: $this,
+                context: [
+                'queue' => $queue,
+                'event_type' => $eventType,
+                'payload' => $payload,
+                'idempotency_key' => $idempotencyKey,
+            ]);
             if (method_exists($listener, 'handle')) {
                 // Call listener with payload
                 // Note: If listener expects an Event object, create it from payload
@@ -238,12 +254,15 @@ class SqsConsumeCommand extends Command
 
             $this->recordMetrics($eventType, 'success');
 
-            Log::info('Message processed successfully', [
-                'queue' => $queue,
-                'event_type' => $eventType,
-                'idempotency_key' => $idempotencyKey,
-            ]);
-
+            logOnSlackDataIfExists(
+                messages: 'Message processed successfully',
+                command: $this,
+                context: [
+                    'queue' => $queue,
+                    'event_type' => $eventType,
+                    'idempotency_key' => $idempotencyKey,
+                    'payload' => $payload,
+                ]);
         } catch (\Throwable $e) {
             // Remove processing lock
             if ($idempotencyKey) {
@@ -255,18 +274,26 @@ class SqsConsumeCommand extends Command
 
             if ($this->isTransientError($e)) {
                 $this->transientErrors++;
-                $this->handleTransientError($e, $eventType, $receiveCount, $queue, $idempotencyKey);
+                $this->handleTransientError(
+                    e:$e,
+                    receiveCount: $receiveCount,
+                    queue: $queue,
+                    messageBody: $message['Body'],
+                    eventType:$eventType,
+                    idempotencyKey:$idempotencyKey
+                );
                 // Don't delete - let it retry (SQS will handle retry logic)
                 $this->recordMetrics($eventType ?? 'unknown', 'transient_error');
 
             } elseif ($this->isPermanentError($e)) {
                 $this->handlePermanentError(
-                    $e,
-                    $receiptHandle,
-                    $consumer,
-                    $eventType,
-                    $idempotencyKey,
-                    $queue
+                    e: $e,
+                    receiptHandle: $receiptHandle,
+                    consumer: $consumer,
+                    queue: $queue,
+                    messageBody: $message['Body'],
+                    eventType: $eventType,
+                    idempotencyKey: $idempotencyKey
                 );
                 // Delete message (don't retry)
                 $consumer->deleteMessage($receiptHandle);
@@ -278,6 +305,7 @@ class SqsConsumeCommand extends Command
                 Log::error('Unknown exception type, treating as transient', [
                     'exception' => get_class($e),
                     'message' => $e->getMessage(),
+                    'body' => $message['Body'],
                     'queue' => $queue,
                     'event_type' => $eventType ?? 'unknown',
                     'idempotency_key' => $idempotencyKey,
@@ -302,6 +330,14 @@ class SqsConsumeCommand extends Command
         return DB::table('processed_events')
             ->where('idempotency_key', $idempotencyKey)
             ->exists();
+    }
+    private function isAlreadyProcessing(string $idempotencyKey): bool
+    {
+        // Check Redis first (fast path)
+        if (Redis::exists("sqs:processing:{$idempotencyKey}")) {
+            return true;
+        }
+        return  false;
     }
 
     private function markAsProcessing(string $idempotencyKey): void
@@ -374,15 +410,23 @@ class SqsConsumeCommand extends Command
         return false;
     }
 
-    private function handleTransientError(\Throwable $e, ?string $eventType, int $receiveCount, string $queue, ?string $idempotencyKey): void
+    private function handleTransientError(
+        \Throwable $e,
+        int $receiveCount,
+        string $queue,
+        array $messageBody,
+        ?string $eventType,
+        ?string $idempotencyKey
+    ): void
     {
-        Log::warning('Transient error, message will retry', [
+        Log::error('Transient error, message will retry', [
             'error' => $e->getMessage(),
             'exception' => get_class($e),
             'event_type' => $eventType ?? 'unknown',
             'idempotency_key' => $idempotencyKey,
             'receive_count' => $receiveCount,
             'queue' => $queue,
+            'body' => $messageBody,
             'max_receive_count' => 5,
             'error_type' => 'transient_error',
         ]);
@@ -396,9 +440,10 @@ class SqsConsumeCommand extends Command
         \Throwable  $e,
         string      $receiptHandle,
         SQSConsumer $consumer,
+        string      $queue,
+        array $messageBody,
         ?string     $eventType,
-        ?string     $idempotencyKey,
-        string      $queue
+        ?string     $idempotencyKey
     ): void
     {
         Log::error('Permanent error detected', [
@@ -407,6 +452,7 @@ class SqsConsumeCommand extends Command
             'event_type' => $eventType ?? 'unknown',
             'idempotency_key' => $idempotencyKey,
             'queue' => $queue,
+            'body' => $messageBody,
             'error_type' => 'permanent_error',
             'trace' => $e->getTraceAsString(),
         ]);
@@ -527,14 +573,13 @@ class SqsConsumeCommand extends Command
             }
         } catch (\Throwable $e) {
             // Don't let metrics failure break message processing
-            Log::warning('Failed to send CloudWatch metrics', [
+            Log::error('Failed to send CloudWatch metrics', [
                 'error' => $e->getMessage(),
                 'event_type' => $eventType,
                 'outcome' => $outcome,
             ]);
         }
     }
-
     private function logMessage(string $message, string $type = 'info'): void
     {
         $this->$type(sprintf(
@@ -543,6 +588,5 @@ class SqsConsumeCommand extends Command
             $message
         ));
     }
-
 }
 
