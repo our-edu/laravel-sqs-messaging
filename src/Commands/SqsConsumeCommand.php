@@ -108,6 +108,7 @@ class SqsConsumeCommand extends Command
         } catch (\Throwable $e) {
             Log::error('SQS Consume Command Error', [
                 'queue' => $queue,
+                'messages' => $messages,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
@@ -137,6 +138,7 @@ class SqsConsumeCommand extends Command
                 Log::error('Invalid JSON, discarding', [
                     'queue' => $queue,
                     'message_id' => $messageId,
+                    'body' => $body,
                     'error' => json_last_error_msg(),
                     'error_type' => 'validation_error',
                 ]);
@@ -169,10 +171,11 @@ class SqsConsumeCommand extends Command
             $idempotencyKey = $body['idempotency_key'];
 
             // Step 3: Idempotency Check
-            if ($this->isAlreadyProcessed($idempotencyKey)) {
+            if ($this->isAlreadyProcessed($idempotencyKey) || $this->isAlreadyProcessing($idempotencyKey) ) {
                 Log::error('Duplicate message detected, skipping', [
                     'queue' => $queue,
                     'idempotency_key' => $idempotencyKey,
+                    'payload' => $payload,
                     'event_type' => $eventType,
                     'receive_count' => $receiveCount,
                 ]);
@@ -192,6 +195,7 @@ class SqsConsumeCommand extends Command
                 $consumer->changeVisibilityTimeout($receiptHandle, 120); // 2 minutes
                 Log::error('Extended visibility timeout for long-running event', [
                     'event_type' => $eventType,
+                    'payload' => $payload,
                     'timeout' => 120,
                 ]);
             }
@@ -204,6 +208,7 @@ class SqsConsumeCommand extends Command
                 Log::error('Event type not mapped', [
                     'queue' => $queue,
                     'event_type' => $eventType,
+                    'payload' => $payload,
                     'idempotency_key' => $idempotencyKey,
                     'available_events' => array_keys($eventMap),
                     'error_type' => 'permanent_error',
@@ -269,18 +274,26 @@ class SqsConsumeCommand extends Command
 
             if ($this->isTransientError($e)) {
                 $this->transientErrors++;
-                $this->handleTransientError($e, $eventType, $receiveCount, $queue, $idempotencyKey);
+                $this->handleTransientError(
+                    e:$e,
+                    receiveCount: $receiveCount,
+                    queue: $queue,
+                    messageBody: $message['Body'],
+                    eventType:$eventType,
+                    idempotencyKey:$idempotencyKey
+                );
                 // Don't delete - let it retry (SQS will handle retry logic)
                 $this->recordMetrics($eventType ?? 'unknown', 'transient_error');
 
             } elseif ($this->isPermanentError($e)) {
                 $this->handlePermanentError(
-                    $e,
-                    $receiptHandle,
-                    $consumer,
-                    $eventType,
-                    $idempotencyKey,
-                    $queue
+                    e: $e,
+                    receiptHandle: $receiptHandle,
+                    consumer: $consumer,
+                    queue: $queue,
+                    messageBody: $message['Body'],
+                    eventType: $eventType,
+                    idempotencyKey: $idempotencyKey
                 );
                 // Delete message (don't retry)
                 $consumer->deleteMessage($receiptHandle);
@@ -292,6 +305,7 @@ class SqsConsumeCommand extends Command
                 Log::error('Unknown exception type, treating as transient', [
                     'exception' => get_class($e),
                     'message' => $e->getMessage(),
+                    'body' => $message['Body'],
                     'queue' => $queue,
                     'event_type' => $eventType ?? 'unknown',
                     'idempotency_key' => $idempotencyKey,
@@ -316,6 +330,14 @@ class SqsConsumeCommand extends Command
         return DB::table('processed_events')
             ->where('idempotency_key', $idempotencyKey)
             ->exists();
+    }
+    private function isAlreadyProcessing(string $idempotencyKey): bool
+    {
+        // Check Redis first (fast path)
+        if (Redis::exists("sqs:processing:{$idempotencyKey}")) {
+            return true;
+        }
+        return  false;
     }
 
     private function markAsProcessing(string $idempotencyKey): void
@@ -388,7 +410,14 @@ class SqsConsumeCommand extends Command
         return false;
     }
 
-    private function handleTransientError(\Throwable $e, ?string $eventType, int $receiveCount, string $queue, ?string $idempotencyKey): void
+    private function handleTransientError(
+        \Throwable $e,
+        int $receiveCount,
+        string $queue,
+        array $messageBody,
+        ?string $eventType,
+        ?string $idempotencyKey
+    ): void
     {
         Log::error('Transient error, message will retry', [
             'error' => $e->getMessage(),
@@ -397,6 +426,7 @@ class SqsConsumeCommand extends Command
             'idempotency_key' => $idempotencyKey,
             'receive_count' => $receiveCount,
             'queue' => $queue,
+            'body' => $messageBody,
             'max_receive_count' => 5,
             'error_type' => 'transient_error',
         ]);
@@ -410,9 +440,10 @@ class SqsConsumeCommand extends Command
         \Throwable  $e,
         string      $receiptHandle,
         SQSConsumer $consumer,
+        string      $queue,
+        array $messageBody,
         ?string     $eventType,
-        ?string     $idempotencyKey,
-        string      $queue
+        ?string     $idempotencyKey
     ): void
     {
         Log::error('Permanent error detected', [
@@ -421,6 +452,7 @@ class SqsConsumeCommand extends Command
             'event_type' => $eventType ?? 'unknown',
             'idempotency_key' => $idempotencyKey,
             'queue' => $queue,
+            'body' => $messageBody,
             'error_type' => 'permanent_error',
             'trace' => $e->getTraceAsString(),
         ]);
