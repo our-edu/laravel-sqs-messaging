@@ -57,6 +57,7 @@ SQS_CLOUDWATCH_NAMESPACE=SQS/PaymentService
 ### 3. Configure Queues
 
 Edit `config/sqs_queues.php`:
+    HINT: This File Defines The SQS Queues Used By Your Application
 
 ```php
 return [
@@ -72,15 +73,27 @@ return [
 ### 4. Configure Event Mappings
 
 Edit `config/sqs_events.php`:
-
+    
+HINT: This File Maps Events To Their Respective Listeners ( used in receiving messages )
 ```php
 return [
-    'StudentEnrolled' => \App\Events\StudentEnrolled::class,
-    'StudentWithdraw' => \App\Events\StudentWithdraw::class,
+     'admission:admission:assign.subscription.services' => CreateStudentSchoolSubscriptionListener::class,
+     'admission:admission:cancel.application' => CancelStudentSubscriptionServicesListener::class,
 ];
 ```
 
-### 5. Run Migration
+### 5. Configure Target Queues 
+Edit `config/sqs_event_queues.php`:
+ 
+HINT: This File Maps Events To Their Target Queues ( used in publishing messages )
+```php
+return [
+    'payment:payment:student.subscribe.and.pay' => 'admission-service-queue',
+    'payment:payment:cancel.students' => 'admission-service-queue',
+    ];
+```
+
+### 6. Run Migration
 
 ```bash
 php artisan migrate
@@ -88,7 +101,7 @@ php artisan migrate
 
 This creates the `processed_events` table for idempotency.
 
-### 6. Ensure Queues Exist
+### 7. Ensure Queues Exist
 
 ```bash
 php artisan sqs:ensure
@@ -154,7 +167,7 @@ trait Publishable
 ```
 
 **Step 2:** In your listeners where you publish a message, replace RabbitMQ publishing code:
-
+    HINT: Use The Same Payload Constructor Parameters
 **Old RabbitMQ Publisher:**
 ```php
 Notification::publish($queueName, $payload)
@@ -169,7 +182,7 @@ app(MessagingService::class)->publish(
 ```
 
 **Example Migration:**
-
+    HINT: Use The Same Payload Constructor Parameters ( \$event->reversePaymentRequest, $usersUuids )
 **Old RabbitMQ Listener:**
 ```php
 namespace Domain\Payments\Listeners\ReversePaymentRequest;
@@ -221,7 +234,7 @@ class ReversePaymentRequestCreatedListener
         
         // New messaging service publish
         app(MessagingService::class)->publish(
-            event: new ReversePaymentRequestNotification(queueName: $this->queueName, payload: $event->students),
+            event: new ReversePaymentRequestNotification($event->reversePaymentRequest, $usersUuids),  // HINT: Use The Same Payload Constructor Parameters
             eventClassReference: ReversePaymentRequestNotification::class
         );
     }
