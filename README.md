@@ -83,7 +83,7 @@ return [
 ```
 
 ### 5. Configure Target Queues 
-Edit `config/sqs_event_queues.php`:
+Edit `config/sqs_target_queues.php`:
  
 HINT: This File Maps Events To Their Target Queues ( used in publishing messages )
 ```php
@@ -265,11 +265,12 @@ Add to Supervisor configuration:
 
 ```ini
 [program:sqs-payment-consumer]
+process_name=%(program_name)s_%(process_num)02d
 command=php /var/www/artisan sqs:consume payment-service-queue
 autostart=true
 autorestart=true
-user=www-data
-numprocs=2
+user=root
+numprocs=1
 stdout_logfile=/var/www/storage/logs/payment-consumer.log
 ```
 
