@@ -9,7 +9,9 @@ return [
     | Configuration for AWS SQS message queuing service.
     |
     */
-
+    'region' => env('AWS_DEFAULT_REGION', 'us-east-2'),
+    'access_key_id' => env('AWS_SQS_ACCESS_KEY_ID'),
+    'secret_access_key' => env('AWS_SQS_SECRET_ACCESS_KEY'),
     /*
     |--------------------------------------------------------------------------
     | Queue Prefix
