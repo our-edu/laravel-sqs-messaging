@@ -414,11 +414,11 @@ class SqsConsumeCommand extends Command
         \Throwable $e,
         int $receiveCount,
         string $queue,
-        array $messageBody,
+        mixed $messageBody,
         ?string $eventType,
         ?string $idempotencyKey
-    ): void
-    {
+    ): void {
+        $normalizedBody = $this->normalizeMessageBody($messageBody);
         Log::error('Transient error, message will retry', [
             'error' => $e->getMessage(),
             'exception' => get_class($e),
@@ -426,7 +426,7 @@ class SqsConsumeCommand extends Command
             'idempotency_key' => $idempotencyKey,
             'receive_count' => $receiveCount,
             'queue' => $queue,
-            'body' => $messageBody,
+            'body' => $normalizedBody,
             'max_receive_count' => 5,
             'error_type' => 'transient_error',
         ]);
@@ -441,18 +441,18 @@ class SqsConsumeCommand extends Command
         string      $receiptHandle,
         SQSConsumer $consumer,
         string      $queue,
-        array $messageBody,
+        mixed       $messageBody,
         ?string     $eventType,
         ?string     $idempotencyKey
-    ): void
-    {
+    ): void {
+        $normalizedBody = $this->normalizeMessageBody($messageBody);
         Log::error('Permanent error detected', [
             'error' => $e->getMessage(),
             'exception' => get_class($e),
             'event_type' => $eventType ?? 'unknown',
             'idempotency_key' => $idempotencyKey,
             'queue' => $queue,
-            'body' => $messageBody,
+            'body' => $normalizedBody,
             'error_type' => 'permanent_error',
             'trace' => $e->getTraceAsString(),
         ]);
@@ -475,6 +475,18 @@ class SqsConsumeCommand extends Command
         Log::channel('slack')->critical($title, $context);
 
         // You can also send to other channels (email, PagerDuty, etc.)
+    }
+
+    private function normalizeMessageBody(mixed $messageBody): mixed
+    {
+        if (is_string($messageBody)) {
+            $decoded = json_decode($messageBody, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                return $decoded;
+            }
+        }
+
+        return $messageBody;
     }
 
     /**
