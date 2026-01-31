@@ -303,7 +303,7 @@ class SqsConsumeCommand extends Command
                 // Unknown exception - treat as transient (safer)
                 $this->transientErrors++;
                 Log::error('Unknown exception type, treating as transient', [
-                    'exception' => get_class($e),
+                    'exception class' => get_class($e),
                     'message' => $e->getMessage(),
                     'body' => $message['Body'],
                     'queue' => $queue,
