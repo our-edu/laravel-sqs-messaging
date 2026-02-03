@@ -16,9 +16,9 @@ class TestAwsConnectionCommand extends Command
         $this->line('');
 
         // Get credentials
-        $key = config('aws.key', env('AWS_SQS_ACCESS_KEY_ID'));
-        $secret = config('aws.secret', env('AWS_SQS_SECRET_ACCESS_KEY'));
-        $region = config('aws.region', env('AWS_DEFAULT_REGION', 'us-east-2'));
+        $key = config('sqs.access_key_id');
+        $secret = config('sqs.secret_access_key');
+        $region = config('sqs.region');
 
         // Display config (without showing full secret)
         $this->line('Configuration:');
@@ -26,7 +26,7 @@ class TestAwsConnectionCommand extends Command
         $this->line("  Access Key ID: " . ($key ? substr($key, 0, 20) . '...' : 'NOT SET'));
         $this->line("  Secret Key: " . ($secret ? '***SET*** (' . strlen($secret) . ' chars)' : 'NOT SET'));
         $this->line('');
-        
+
         // Validate Access Key format
         if ($key && !preg_match('/^AKIA[A-Z0-9]{16}$/', $key)) {
             $this->warn('⚠️  WARNING: Access Key ID format looks unusual!');
@@ -57,7 +57,7 @@ class TestAwsConnectionCommand extends Command
 
         try {
             $this->info('Creating SQS client...');
-            
+
             $client = new SqsClient([
                 'region' => $region,
                 'version' => 'latest',
@@ -73,13 +73,13 @@ class TestAwsConnectionCommand extends Command
             // Test connection by listing queues
             $this->info("Testing connection to region: {$region}...");
             $result = $client->listQueues();
-            
+
             $queues = $result->get('QueueUrls') ?? [];
-            
+
             $this->info('✅ Connection successful!');
             $this->line('');
             $this->line("Found " . count($queues) . " queue(s) in this region:");
-            
+
             if (empty($queues)) {
                 $this->warn('  No queues found in this region');
             } else {
@@ -103,7 +103,7 @@ class TestAwsConnectionCommand extends Command
             $this->error('❌ AWS Error: ' . $e->getAwsErrorCode());
             $this->error('Message: ' . $e->getAwsErrorMessage());
             $this->line('');
-            
+
             if ($e->getAwsErrorCode() === 'InvalidClientTokenId') {
                 $this->line('The AWS credentials are invalid or expired.');
                 $this->line('');
@@ -124,7 +124,7 @@ class TestAwsConnectionCommand extends Command
                 $this->line('  2. Add permissions → Attach policy');
                 $this->line('  3. Search: "AmazonSQSFullAccess" → Attach');
             }
-            
+
             return Command::FAILURE;
         } catch (\Throwable $e) {
             $this->error('❌ Error: ' . $e->getMessage());
