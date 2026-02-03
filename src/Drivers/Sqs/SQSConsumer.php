@@ -16,14 +16,14 @@ class SQSConsumer
     public function __construct(string $queueUrl)
     {
         $this->sqsClient = new SqsClient([
-            'region' => config('sqs.region'),
+            'region' => config('aws.region', env('AWS_DEFAULT_REGION', 'us-east-2')),
             'version' => 'latest',
             'credentials' => [
-                'key' => config('sqs.access_key_id'),
-                'secret' => config('sqs.secret_access_key'),
+                'key' => config('aws.key', env('AWS_SQS_ACCESS_KEY_ID')),
+                'secret' => config('aws.secret', env('AWS_SQS_SECRET_ACCESS_KEY')),
             ],
         ]);
-
+        
         $this->queueUrl = $queueUrl;
     }
 
@@ -50,7 +50,7 @@ class SQSConsumer
                 'queue_url' => $this->queueUrl,
                 'error' => $e->getMessage(),
             ]);
-
+            
             throw $e;
         }
     }
@@ -73,7 +73,7 @@ class SQSConsumer
                 'receipt_handle' => $receiptHandle,
                 'error' => $e->getMessage(),
             ]);
-
+            
             throw $e;
         }
     }
@@ -91,7 +91,7 @@ class SQSConsumer
                 'ReceiptHandle' => $receiptHandle,
                 'VisibilityTimeout' => $visibilityTimeout,
             ]);
-
+            
             Log::info('Extended visibility timeout', [
                 'queue' => $this->queueUrl,
                 'new_timeout' => $visibilityTimeout,
@@ -103,7 +103,7 @@ class SQSConsumer
                 'visibility_timeout' => $visibilityTimeout,
                 'error' => $e->getMessage(),
             ]);
-
+            
             throw $e;
         }
     }
@@ -121,13 +121,13 @@ class SQSConsumer
                 'AttributeNames' => ['ApproximateNumberOfMessages'],
             ]);
 
-            return (int)($result->get('Attributes')['ApproximateNumberOfMessages'] ?? 0);
+            return (int) ($result->get('Attributes')['ApproximateNumberOfMessages'] ?? 0);
         } catch (Throwable $e) {
             Log::error('SQS Get Queue Depth Error', [
                 'queue_url' => $this->queueUrl,
                 'error' => $e->getMessage(),
             ]);
-
+            
             throw $e;
         }
     }

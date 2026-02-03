@@ -16,11 +16,11 @@ class SQSPublisher
     public function __construct(?SqsClient $sqsClient = null, ?SQSResolver $sqsResolver = null)
     {
         $this->sqsClient = $sqsClient ?? new SqsClient([
-            'region' => config('sqs.region'),
+            'region' => config('aws.region', env('AWS_DEFAULT_REGION', 'us-east-2')),
             'version' => 'latest',
             'credentials' => [
-                'key' => config('sqs.access_key_id',),
-                'secret' => config('sqs.secret_access_key'),
+                'key' => config('aws.key', env('AWS_SQS_ACCESS_KEY_ID')),
+                'secret' => config('aws.secret', env('AWS_SQS_SECRET_ACCESS_KEY')),
             ],
         ]);
         
