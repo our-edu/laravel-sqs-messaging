@@ -1,4 +1,4 @@
-# Upgrade to  2.0.0 v Guide
+# Upgrade to v2.0.0  Guide
 
 ## Overview
 
