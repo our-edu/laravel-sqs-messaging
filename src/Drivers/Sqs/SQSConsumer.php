@@ -15,14 +15,7 @@ class SQSConsumer
 
     public function __construct(string $queueUrl)
     {
-        $this->sqsClient = new SqsClient([
-            'region' => config('sqs.region'),
-            'version' => 'latest',
-            'credentials' => [
-                'key' => config('sqs.access_key_id'),
-                'secret' => config('sqs.secret_access_key'),
-            ],
-        ]);
+        $this->sqsClient = app(SqsClient::class);
 
         $this->queueUrl = $queueUrl;
     }
