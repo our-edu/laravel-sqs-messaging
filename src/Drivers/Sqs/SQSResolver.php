@@ -15,14 +15,7 @@ class SQSResolver
 
     public function __construct(?SqsClient $sqsClient = null)
     {
-        $this->sqsClient = $sqsClient ?? new SqsClient([
-            'region' => config('sqs.region'),
-            'version' => 'latest',
-            'credentials' => [
-                'key' => config('sqs.access_key_id'),
-                'secret' => config('sqs.secret_access_key'),
-            ],
-        ]);
+        $this->sqsClient = $sqsClient ?? app(SqsClient::class);
     }
 
     /**

@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
 use OurEdu\SqsMessaging\Drivers\Sqs\CloudWatchMetricsService;
 use OurEdu\SqsMessaging\Drivers\Sqs\SQSResolver;
+use Aws\Sqs\SqsClient;
 
 class SqsMessagingServiceProvider extends ServiceProvider
 {
@@ -22,6 +23,17 @@ class SqsMessagingServiceProvider extends ServiceProvider
         // Register unified MessagingService
         $this->app->singleton(\OurEdu\SqsMessaging\MessagingService::class, function ($app) {
             return new \OurEdu\SqsMessaging\MessagingService();
+        });
+
+        $this->app->singleton(SqsClient::class, function ($app) {
+            return new SqsClient([
+                'region' => config('sqs.region'),
+                'version' => 'latest',
+                'credentials' => [
+                    'key' => config('sqs.access_key_id'),
+                    'secret' => config('sqs.secret_access_key'),
+                ],
+            ]);
         });
 
         // Merge config files
