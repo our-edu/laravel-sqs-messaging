@@ -58,14 +58,7 @@ class TestAwsConnectionCommand extends Command
         try {
             $this->info('Creating SQS client...');
 
-            $client = new SqsClient([
-                'region' => $region,
-                'version' => 'latest',
-                'credentials' => [
-                    'key' => $key,
-                    'secret' => $secret,
-                ],
-            ]);
+            $client = app(SqsClient::class);
 
             $this->info('✅ SQS client created');
             $this->line('');

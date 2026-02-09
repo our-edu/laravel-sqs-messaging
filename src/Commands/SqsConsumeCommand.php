@@ -304,13 +304,18 @@ class SqsConsumeCommand extends Command
                 $this->transientErrors++;
                 Log::error('Unknown exception type, treating as transient', [
                     'exception class' => get_class($e),
-                    'message' => $e->getMessage(),
+                    'exceptionMessage' => $e->getMessage(),
                     'body' => $message['Body'],
                     'queue' => $queue,
                     'event_type' => $eventType ?? 'unknown',
                     'idempotency_key' => $idempotencyKey,
                     'receive_count' => $receiveCount,
-                    'error_type' => 'unknown',
+                    'code' => $e->getCode(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'stack_trace' => $e->getTraceAsString(),
+                    'previous' => $this->formatPrevious($e),
+                    'error_type' => $e instanceof \Error ? 'php_error' : ($e instanceof \Exception ? 'php_exception' : 'unknown'),
                 ]);
 
                 $this->recordMetrics($eventType ?? 'unknown', 'transient_error');
@@ -599,6 +604,26 @@ class SqsConsumeCommand extends Command
             now()->format('Y-m-d H:i:s'),
             $message
         ));
+    }
+    /**
+     * Recursively format previous exceptions
+     */
+    private function formatPrevious(\Throwable $e): array
+    {
+        $previousDetails = [];
+        $prev = $e->getPrevious();
+        while ($prev) {
+            $previousDetails[] = [
+                'class' => get_class($prev),
+                'message' => $prev->getMessage(),
+                'code' => $prev->getCode(),
+                'file' => $prev->getFile(),
+                'line' => $prev->getLine(),
+                'stack_trace' => $prev->getTraceAsString(),
+            ];
+            $prev = $prev->getPrevious();
+        }
+        return $previousDetails;
     }
 }
 
