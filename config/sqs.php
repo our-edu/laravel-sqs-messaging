@@ -9,7 +9,7 @@ return [
     | Configuration for AWS SQS message queuing service.
     |
     */
-    'region' => env('AWS_DEFAULT_REGION', 'us-east-2'),
+    'region' => env('AWS_SQS_DEFAULT_REGION', 'us-east-2'),
     'access_key_id' => env('AWS_SQS_ACCESS_KEY_ID'),
     'secret_access_key' => env('AWS_SQS_SECRET_ACCESS_KEY'),
     /*
@@ -67,5 +67,11 @@ return [
         'enabled' => env('SQS_CLOUDWATCH_ENABLED', true),
         'namespace' => env('SQS_CLOUDWATCH_NAMESPACE', 'SQS/PaymentService'),
     ],
+    /*
+     *  allow_timestamp_attribute: If true, the 'timestamp' field will not be removed from the payload when generating the idempotency key.
+     *  This is useful if your events include a timestamp that should be considered part of the event's identity.
+     *  By default, this is false, meaning 'timestamp' will be ignored for idempotency key generation.
+     * */
+    'allow_timestamp_attribute' => env('SQS_ALLOW_TIMESTAMP_ATTRIBUTE', false),
 ];
 

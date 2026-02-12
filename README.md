@@ -19,7 +19,7 @@ A comprehensive Laravel package for AWS SQS messaging with RabbitMQ rollback sup
 ### Via Composer
 
 ```bash
-composer require our-edu/laravel-sqs-messaging:2.*
+composer require our-edu/laravel-sqs-messaging:3.*
 ```
 
 ## Configuration
@@ -36,9 +36,11 @@ Add to your `.env`:
 
 ```env
 # AWS Credentials (required)
+AWS_SQS_DEFAULT_REGION=us-east-2
 AWS_SQS_ACCESS_KEY_ID=your-access-key
 AWS_SQS_SECRET_ACCESS_KEY=your-secret-key
 AWS_DEFAULT_REGION=me-central-1
+SQS_ALLOW_TIMESTAMP_ATTRIBUTE=false  # Set to true if you want to use the timestamp attribute for idempotency
 
 # SQS Configuration
 SQS_QUEUE_PREFIX=staging  # or production, dev, etc.
@@ -52,8 +54,11 @@ SQS_CLOUDWATCH_ENABLED=true
 SQS_CLOUDWATCH_NAMESPACE=SQS/PaymentService
 ```
 
-**Note:** Set `MESSAGING_FALLBACK_TO_RABBITMQ=true` if you have other projects still using RabbitMQ. This ensures messages go to RabbitMQ when SQS queue doesn't exist.
+**Notes:** 
+     
+1- Set `MESSAGING_FALLBACK_TO_RABBITMQ=true` if you have other projects still using RabbitMQ. This ensures messages go to RabbitMQ when SQS queue doesn't exist.
 
+2-Set `SQS_ALLOW_TIMESTAMP_ATTRIBUTE=true` and append  `timestamp` attribute to the payload of the message  if you want to generate the IdempotencyKey based on the timestamp.
 ### 3. Configure Queues
 
 Edit `config/sqs_queues.php`:

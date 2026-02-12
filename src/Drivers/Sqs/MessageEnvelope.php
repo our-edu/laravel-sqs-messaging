@@ -92,6 +92,10 @@ class MessageEnvelope
             'trace_id',
         ];
 
+        if (config('sqs.allow_timestamp_attribute', false)) {
+            $temporaryFields = array_diff($temporaryFields, ['timestamp']);
+        }
+
         $filtered = [];
         foreach ($payload as $key => $value) {
             if (in_array($key, $temporaryFields, true)) {
