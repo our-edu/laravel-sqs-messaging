@@ -58,7 +58,7 @@ SQS_CLOUDWATCH_NAMESPACE=SQS/PaymentService
      
 1- Set `MESSAGING_FALLBACK_TO_RABBITMQ=true` if you have other projects still using RabbitMQ. This ensures messages go to RabbitMQ when SQS queue doesn't exist.
 
-2-Set `SQS_ALLOW_TIMESTAMP_ATTRIBUTE=true` and append  `timestamp` attribute to the payload of the message  if you want to use the timestamp attribute for idempotency instead of a custom attribute.
+2-Set `SQS_ALLOW_TIMESTAMP_ATTRIBUTE=true` and append  `timestamp` attribute to the payload of the message  if you want to generate the IdempotencyKey based on the timestamp.
 ### 3. Configure Queues
 
 Edit `config/sqs_queues.php`:
