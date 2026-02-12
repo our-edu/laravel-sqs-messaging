@@ -28,16 +28,9 @@ to
 ```
 
 ### Step 2: Update .env file
-in composer.json update the following line
-```bash
-       AWS_DEFAULT_REGION=us-east-2,
-```
-to
-```bash
-       AWS_SQS_DEFAULT_REGION=us-east-2,
-```
 and add the following line to your .env file
 ```bash
+       AWS_SQS_DEFAULT_REGION=us-east-2,
        SQS_ALLOW_TIMESTAMP_ATTRIBUTE=false  # Set to true if you want to use the timestamp attribute for idempotency
 ```
 
