@@ -26,6 +26,17 @@ to
 ```bash
     'region' => env('AWS_SQS_DEFAULT_REGION', 'us-east-2'),
 ```
+
+### Step 3: Update .env file
+in composer.json update the following line
+```bash
+       AWS_DEFAULT_REGION=us-east-2,
+```
+to
+```bash
+       AWS_SQS_DEFAULT_REGION=us-east-2,
+```
+
 ### Step 2: Update composer.json
    in composer.json update the following line 
 ```bash
