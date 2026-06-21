@@ -108,7 +108,6 @@ class SqsConsumeCommand extends Command
         } catch (\Throwable $e) {
             Log::error('SQS Consume Command Error', [
                 'queue' => $queue,
-                'messages' => $messages,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
